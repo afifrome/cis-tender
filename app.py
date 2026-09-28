@@ -778,34 +778,61 @@ elif role == "Auditor":
 
     st.dataframe(audit_df, use_container_width=True, hide_index=True)
 
-    # --- AUDITOR RECORD REMOVAL UTILITY ---
+    # --- AUDITOR RECORD MANAGEMENT UTILITIES WITH 2-STEP CONFIRMATION ---
     st.markdown("### Audit Trail Record Management")
-    with st.form("delete_audit_form"):
-      record_options = {
-          f"ID {row['id']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
-              "id"
-          ]
-          for _, row in raw_audit_df.iterrows()
-      }
-      selected_label = st.selectbox(
-          "Select Verification Entry to Remove", list(record_options.keys())
-      )
-      delete_record_btn = st.form_submit_button(
-          "🗑️ Remove Selected Audit Record"
-      )
+    col_del1, col_del2 = st.columns(2)
 
-      if delete_record_btn and selected_label:
-        target_id = record_options[selected_label]
-        conn = sqlite3.connect("cis_tender.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM tender_submissions WHERE id = ?", (target_id,)
+    with col_del1:
+      with st.form("delete_audit_form"):
+        st.markdown("**Remove Specific Record**")
+        record_options = {
+            f"ID {row['id']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
+                "id"
+            ]
+            for _, row in raw_audit_df.iterrows()
+        }
+        selected_label = st.selectbox(
+            "Select Entry", list(record_options.keys())
         )
-        conn.commit()
-        conn.close()
-        st.success(
-            f"Successfully removed audit verification record (ID: {target_id})."
+        delete_record_btn = st.form_submit_button(
+            "🗑️ Remove Selected Record"
         )
-        st.rerun()
+
+        if delete_record_btn and selected_label:
+          target_id = record_options[selected_label]
+          conn = sqlite3.connect("cis_tender.db")
+          cursor = conn.cursor()
+          cursor.execute(
+              "DELETE FROM tender_submissions WHERE id = ?", (target_id,)
+          )
+          conn.commit()
+          conn.close()
+          st.success(f"Removed audit record (ID: {target_id}).")
+          st.rerun()
+
+    with col_del2:
+      with st.form("clear_all_audit_form"):
+        st.markdown("**Clear Entire Audit Trail**")
+        st.write(
+            "⚠️ This action will delete all logged verification records."
+        )
+        confirm_clear = st.checkbox(
+            "I confirm that I want to delete all audit records"
+        )
+        clear_all_btn = st.form_submit_button("⚠️ Clear All Audit Records")
+
+        if clear_all_btn:
+          if confirm_clear:
+            conn = sqlite3.connect("cis_tender.db")
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM tender_submissions")
+            conn.commit()
+            conn.close()
+            st.warning("All audit verification records have been cleared.")
+            st.rerun()
+          else:
+            st.error(
+                "Please check the confirmation box before clearing all records."
+            )
   else:
     st.info("No audit verification entries logged yet.")

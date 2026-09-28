@@ -167,7 +167,7 @@ logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-# --- POLISHED PROFESSIONAL DARK STYLING ---
+# --- POLISHED PROFESSIONAL DARK STYLING (LARGER & BOLDER TEXT) ---
 st.markdown(
     """
     <style>
@@ -183,7 +183,7 @@ st.markdown(
     }
     
     h3 {
-        font-size: 20px !important;
+        font-size: 22px !important;
         border-bottom: 2px solid #2d3748;
         padding-bottom: 6px;
         margin-top: 30px !important;
@@ -191,7 +191,7 @@ st.markdown(
     }
     
     p, label, span {
-        font-size: 15px !important;
+        font-size: 17px !important;
         font-weight: 600 !important;
         color: #cbd5e1 !important;
     }
@@ -222,14 +222,14 @@ st.markdown(
     .corporate-header-text h1 {
         color: #ffffff !important;
         margin: 0;
-        font-size: 24px !important;
+        font-size: 26px !important;
         font-weight: 700 !important;
     }
     
     .corporate-header-text p {
         margin: 6px 0 0 0;
         color: #94a3b8 !important;
-        font-size: 14px !important;
+        font-size: 15px !important;
         font-weight: 500 !important;
     }
     </style>
@@ -355,7 +355,14 @@ if role == "Committee Member":
   if not tenderers_df.empty:
     display_df = tenderers_df.copy()
     display_df.insert(0, "No.", range(1, len(display_df) + 1))
-    st.dataframe(display_df, hide_index=True, use_container_width=True)
+    st.dataframe(
+        display_df,
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "No.": st.column_config.Column("No.", width="small"),
+        },
+    )
   else:
     st.info("No tender submissions listed yet.")
 
@@ -489,7 +496,12 @@ elif role == "Admin":
       admin_display_df = tenderers_df.copy()
       admin_display_df.insert(0, "No.", range(1, len(admin_display_df) + 1))
       st.dataframe(
-          admin_display_df, hide_index=True, use_container_width=True
+          admin_display_df,
+          hide_index=True,
+          use_container_width=True,
+          column_config={
+              "No.": st.column_config.Column("No.", width="small"),
+          },
       )
     else:
       st.info("No tenderers listed.")
@@ -530,7 +542,14 @@ elif role == "Admin":
       dept_display_df = dept_df.copy()
       dept_display_df.columns = ["Department Name"]
       dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
-      st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
+      st.dataframe(
+          dept_display_df,
+          use_container_width=True,
+          hide_index=True,
+          column_config={
+              "No.": st.column_config.Column("No.", width="small"),
+          },
+      )
 
     col_d1, col_d2 = st.columns(2)
     with col_d1:
@@ -586,7 +605,14 @@ elif role == "Admin":
       users_display_df.insert(
           0, "Item No.", range(1, len(users_display_df) + 1)
       )
-      st.dataframe(users_display_df, use_container_width=True, hide_index=True)
+      st.dataframe(
+          users_display_df,
+          use_container_width=True,
+          hide_index=True,
+          column_config={
+              "Item No.": st.column_config.Column("Item No.", width="small"),
+          },
+      )
 
       with st.form("edit_user_form"):
         st.markdown("**Reset User Password**")

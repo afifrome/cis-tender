@@ -167,7 +167,7 @@ logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-# --- POLISHED PROFESSIONAL DARK STYLING (LARGER & BOLDER TEXT) ---
+# --- POLISHED PROFESSIONAL DARK STYLING (LARGE SECTION BANNERS) ---
 st.markdown(
     """
     <style>
@@ -187,19 +187,25 @@ st.markdown(
         font-weight: 700 !important;
     }
     
-    h3 {
-        font-size: 24px !important;
-        border-bottom: 2px solid #3b82f6;
-        padding-bottom: 8px;
-        margin-top: 35px !important;
-        margin-bottom: 20px !important;
-        color: #60a5fa !important;
-    }
-    
     p, label, span {
         font-size: 17px !important;
         font-weight: 600 !important;
         color: #cbd5e1 !important;
+    }
+
+    /* Prominent Section Header Banners */
+    .section-title {
+        font-size: 20px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        padding: 12px 18px;
+        border-radius: 8px;
+        border-left: 5px solid #3b82f6;
+        margin-top: 35px !important;
+        margin-bottom: 20px !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        letter-spacing: 0.5px;
     }
 
     .corporate-header {
@@ -348,7 +354,10 @@ else:
 
 # --- VIEW: COMMITTEE MEMBER (PUBLIC FORM) ---
 if role == "Committee Member":
-  st.markdown("### Section 1: Active Tender Details")
+  st.markdown(
+      '<div class="section-title">Section 1: Active Tender Details</div>',
+      unsafe_allow_html=True,
+  )
   col1, col2 = st.columns(2)
   with col1:
     st.text_input("Tender No.", value=t_no, disabled=True)
@@ -357,7 +366,10 @@ if role == "Committee Member":
     st.text_input("Tender Title", value=t_title, disabled=True)
     st.text_input("Tender Opening Date & Time", value=t_open, disabled=True)
 
-  st.markdown("### Section 2: Tender Submission Summary")
+  st.markdown(
+      '<div class="section-title">Section 2: Tender Submission Summary</div>',
+      unsafe_allow_html=True,
+  )
   if not tenderers_df.empty:
     display_df = tenderers_df.copy()
     display_df.insert(0, "No.", range(1, len(display_df) + 1))
@@ -372,7 +384,10 @@ if role == "Committee Member":
   else:
     st.info("No tender submissions listed yet.")
 
-  st.markdown("### Section 3: Committee Member Details")
+  st.markdown(
+      '<div class="section-title">Section 3: Committee Member Details</div>',
+      unsafe_allow_html=True,
+  )
   with st.form("verification_form"):
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -382,7 +397,11 @@ if role == "Committee Member":
     with c3:
       designation = st.text_input("Designation * (e.g., Finance Manager)")
 
-    st.markdown("### Section 4: Attendance & Verification")
+    st.markdown(
+        '<div class="section-title" style="margin-top: 15px !important;">Section'
+        " 4: Attendance & Verification</div>",
+        unsafe_allow_html=True,
+    )
     present = st.radio(
         "Were you present throughout the tender opening session? *",
         ["Yes", "No"],
@@ -411,7 +430,11 @@ if role == "Committee Member":
         ),
     )
 
-    st.markdown("### Section 5: Electronic Acknowledgement")
+    st.markdown(
+        '<div class="section-title" style="margin-top: 15px !important;">Section'
+        " 5: Electronic Acknowledgement</div>",
+        unsafe_allow_html=True,
+    )
     st.info(
         "By entering my full name below and submitting this form, I"
         " acknowledge that this submission, together with my company email"

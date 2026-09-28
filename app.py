@@ -167,78 +167,107 @@ logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-# --- PROFESSIONAL STYLING (LARGER & BOLD TEXT, NO BACKGROUND IMAGE) ---
-bg_css = """
-    .stApp {
-        background-color: #0e1117;
-        color: #f8f9fa;
-        font-size: 16px;
-    }
-    """
-
+# --- PROFESSIONAL ENTERPRISE STYLING ---
 st.markdown(
-    f"""
+    """
     <style>
-    {bg_css}
+    /* Main App Background & Text Style */
+    .stApp {
+        background-color: #f4f6f9;
+        color: #2c3e50;
+        font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+    }
     
-    /* Make all headings bigger and bold */
-    h1, h2, h3, h4, h5, h6 {{
-        color: #ffffff !important;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    /* Headers Style */
+    h1, h2, h3, h4, h5, h6 {
+        color: #1f4068 !important;
+        font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
         font-weight: 700 !important;
-    }}
+    }
     
-    h3 {{
-        font-size: 22px !important;
-        margin-top: 15px !important;
-    }}
+    h3 {
+        font-size: 20px !important;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 6px;
+        margin-top: 25px !important;
+        margin-bottom: 15px !important;
+    }
     
-    /* Make general body text, labels, and widget texts larger & bold */
-    p, label, span, div {{
-        font-size: 16px !important;
-        font-weight: 600 !important;
-        color: #f1f3f5 !important;
-    }}
-    
-    /* Input field text styling */
-    input, textarea {{
-        font-size: 16px !important;
-        font-weight: 600 !important;
-    }}
-
-    .corporate-header {{
-        background: linear-gradient(90deg, rgba(31, 64, 104, 0.95) 0%, rgba(22, 36, 71, 0.95) 100%);
-        padding: 20px 25px;
-        border-radius: 8px;
-        color: white;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        border-left: 5px solid #f39c12;
-        display: flex;
-        align-items: center;
-        gap: 20px;
-    }}
-    .corporate-logo {{
-        max-height: 70px;
-        max-width: 150px;
-        object-fit: contain;
-        background: white;
-        padding: 5px;
-        border-radius: 4px;
-        mix-blend-mode: multiply;
-    }}
-    .corporate-header-text h1 {{
-        color: #ffffff !important;
-        margin: 0;
-        font-size: 26px !important;
-        font-weight: 700 !important;
-    }}
-    .corporate-header-text p {{
-        margin: 5px 0 0 0;
-        color: #e2e8f0 !important;
+    /* Labels and Body text */
+    p, label, span {
         font-size: 15px !important;
         font-weight: 600 !important;
-    }}
+        color: #334155 !important;
+    }
+    
+    /* Input fields container */
+    .stTextInput input, .stSelectbox select, .stTextArea textarea {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Corporate Header Banner */
+    .corporate-header {
+        background: linear-gradient(135deg, #1f4068 0%, #162447 100%);
+        padding: 25px 30px;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border-left: 6px solid #f39c12;
+        display: flex;
+        align-items: center;
+        gap: 25px;
+    }
+    
+    .corporate-logo {
+        max-height: 75px;
+        max-width: 160px;
+        object-fit: contain;
+        background: white;
+        padding: 6px;
+        border-radius: 6px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .corporate-header-text h1 {
+        color: #ffffff !important;
+        margin: 0;
+        font-size: 24px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px;
+    }
+    
+    .corporate-header-text p {
+        margin: 6px 0 0 0;
+        color: #cbd5e1 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Form Submits & Buttons */
+    .stButton button {
+        background-color: #1f4068 !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+        border: none !important;
+        padding: 0.5rem 1rem !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .stButton button:hover {
+        background-color: #163254 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -256,7 +285,7 @@ st.markdown(
         {header_logo_html}
         <div class="corporate-header-text">
             <h1>CEMENT INDUSTRIES (SABAH) SDN. BHD.</h1>
-            <p>Sepanggar Industrial Estate | Electronic Tender Opening Attendance & Verification System</p>
+            <p>Sepanggar Industrial Estate &bull; Electronic Tender Opening Attendance & Verification System</p>
         </div>
     </div>
     """,

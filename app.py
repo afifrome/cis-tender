@@ -777,5 +777,35 @@ elif role == "Auditor":
     audit_df["Remarks"] = raw_audit_df["remarks"]
 
     st.dataframe(audit_df, use_container_width=True, hide_index=True)
+
+    # --- AUDITOR RECORD REMOVAL UTILITY ---
+    st.markdown("### Audit Trail Record Management")
+    with st.form("delete_audit_form"):
+      record_options = {
+          f"ID {row['id']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
+              "id"
+          ]
+          for _, row in raw_audit_df.iterrows()
+      }
+      selected_label = st.selectbox(
+          "Select Verification Entry to Remove", list(record_options.keys())
+      )
+      delete_record_btn = st.form_submit_button(
+          "🗑️ Remove Selected Audit Record"
+      )
+
+      if delete_record_btn and selected_label:
+        target_id = record_options[selected_label]
+        conn = sqlite3.connect("cis_tender.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM tender_submissions WHERE id = ?", (target_id,)
+        )
+        conn.commit()
+        conn.close()
+        st.success(
+            f"Successfully removed audit verification record (ID: {target_id})."
+        )
+        st.rerun()
   else:
     st.info("No audit verification entries logged yet.")

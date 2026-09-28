@@ -378,7 +378,15 @@ if role == "Committee Member":
         hide_index=True,
         use_container_width=True,
         column_config={
-            "No.": st.column_config.Column("No.", width="small"),
+            "No.": st.column_config.NumberColumn(
+                "No.", width="small", format="%d"
+            ),
+            "Tenderer Name": st.column_config.TextColumn(
+                "Tenderer Name", width="medium"
+            ),
+            "Tendered Amount (RM)": st.column_config.TextColumn(
+                "Tendered Amount (RM)", width="medium"
+            ),
         },
     )
   else:
@@ -529,7 +537,15 @@ elif role == "Admin":
           hide_index=True,
           use_container_width=True,
           column_config={
-              "No.": st.column_config.Column("No.", width="small"),
+              "No.": st.column_config.NumberColumn(
+                  "No.", width="small", format="%d"
+              ),
+              "Tenderer Name": st.column_config.TextColumn(
+                  "Tenderer Name", width="medium"
+              ),
+              "Tendered Amount (RM)": st.column_config.TextColumn(
+                  "Tendered Amount (RM)", width="medium"
+              ),
           },
       )
     else:
@@ -576,7 +592,12 @@ elif role == "Admin":
           use_container_width=True,
           hide_index=True,
           column_config={
-              "No.": st.column_config.Column("No.", width="small"),
+              "No.": st.column_config.NumberColumn(
+                  "No.", width="small", format="%d"
+              ),
+              "Department Name": st.column_config.TextColumn(
+                  "Department Name", width="large"
+              ),
           },
       )
 
@@ -639,7 +660,15 @@ elif role == "Admin":
           use_container_width=True,
           hide_index=True,
           column_config={
-              "Item No.": st.column_config.Column("Item No.", width="small"),
+              "Item No.": st.column_config.NumberColumn(
+                  "Item No.", width="small", format="%d"
+              ),
+              "Username": st.column_config.TextColumn(
+                  "Username", width="medium"
+              ),
+              "Assigned Role": st.column_config.TextColumn(
+                  "Assigned Role", width="medium"
+              ),
           },
       )
 
@@ -836,7 +865,34 @@ elif role == "Auditor":
         use_container_width=True,
         hide_index=True,
         column_config={
-            "ID": st.column_config.Column("ID", width="small"),
+            "ID": st.column_config.NumberColumn(
+                "ID", width="small", format="%d"
+            ),
+            "Tender No.": st.column_config.TextColumn(
+                "Tender No.", width="small"
+            ),
+            "Tender Title": st.column_config.TextColumn(
+                "Tender Title", width="medium"
+            ),
+            "Closing Date": st.column_config.TextColumn(
+                "Closing Date", width="medium"
+            ),
+            "Opening Date": st.column_config.TextColumn(
+                "Opening Date", width="medium"
+            ),
+            "Verified By": st.column_config.TextColumn(
+                "Verified By", width="medium"
+            ),
+            "Department": st.column_config.TextColumn(
+                "Department", width="small"
+            ),
+            "Designation": st.column_config.TextColumn(
+                "Designation", width="medium"
+            ),
+            "Timestamp": st.column_config.TextColumn(
+                "Timestamp", width="medium"
+            ),
+            "Remarks": st.column_config.TextColumn("Remarks", width="large"),
         },
     )
 

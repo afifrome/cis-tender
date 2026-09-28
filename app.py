@@ -167,66 +167,47 @@ logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-# --- PROFESSIONAL ENTERPRISE STYLING ---
+# --- POLISHED PROFESSIONAL DARK STYLING ---
 st.markdown(
     """
     <style>
-    /* Main App Background & Text Style */
     .stApp {
-        background-color: #f4f6f9;
-        color: #2c3e50;
+        background-color: #0e1117;
+        color: #e2e8f0;
         font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
     }
     
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background-color: #ffffff;
-        border-right: 1px solid #e2e8f0;
-    }
-    
-    /* Headers Style */
     h1, h2, h3, h4, h5, h6 {
-        color: #1f4068 !important;
-        font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+        color: #ffffff !important;
         font-weight: 700 !important;
     }
     
     h3 {
         font-size: 20px !important;
-        border-bottom: 2px solid #e2e8f0;
+        border-bottom: 2px solid #2d3748;
         padding-bottom: 6px;
-        margin-top: 25px !important;
+        margin-top: 30px !important;
         margin-bottom: 15px !important;
     }
     
-    /* Labels and Body text */
     p, label, span {
         font-size: 15px !important;
         font-weight: 600 !important;
-        color: #334155 !important;
+        color: #cbd5e1 !important;
     }
-    
-    /* Input fields container */
-    .stTextInput input, .stSelectbox select, .stTextArea textarea {
-        background-color: #ffffff !important;
-        color: #1e293b !important;
-        border: 1px solid #cbd5e1 !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Corporate Header Banner */
+
     .corporate-header {
-        background: linear-gradient(135deg, #1f4068 0%, #162447 100%);
+        background: linear-gradient(135deg, #1a365d 0%, #0f172a 100%);
         padding: 25px 30px;
         border-radius: 10px;
         color: white;
         margin-bottom: 25px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         border-left: 6px solid #f39c12;
         display: flex;
         align-items: center;
         gap: 25px;
+        border: 1px solid #2d3748;
     }
     
     .corporate-logo {
@@ -236,7 +217,6 @@ st.markdown(
         background: white;
         padding: 6px;
         border-radius: 6px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .corporate-header-text h1 {
@@ -244,29 +224,13 @@ st.markdown(
         margin: 0;
         font-size: 24px !important;
         font-weight: 700 !important;
-        letter-spacing: 0.5px;
     }
     
     .corporate-header-text p {
         margin: 6px 0 0 0;
-        color: #cbd5e1 !important;
+        color: #94a3b8 !important;
         font-size: 14px !important;
         font-weight: 500 !important;
-    }
-    
-    /* Form Submits & Buttons */
-    .stButton button {
-        background-color: #1f4068 !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border-radius: 6px !important;
-        border: none !important;
-        padding: 0.5rem 1rem !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .stButton button:hover {
-        background-color: #163254 !important;
     }
     </style>
     """,

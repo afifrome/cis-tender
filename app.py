@@ -802,7 +802,14 @@ elif role == "Auditor":
     audit_df["Timestamp"] = raw_audit_df["timestamp"]
     audit_df["Remarks"] = raw_audit_df["remarks"]
 
-    st.dataframe(audit_df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        audit_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "ID": st.column_config.Column("ID", width="small"),
+        },
+    )
 
     # --- AUDITOR RECORD MANAGEMENT UTILITIES WITH 2-STEP CONFIRMATION ---
     st.markdown("### Audit Trail Record Management")

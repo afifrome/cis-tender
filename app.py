@@ -162,44 +162,50 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- LOAD BACKGROUND IMAGE AS BASE64 ---
-img_base64 = get_base64_image("cis_sepanggar.jpg")
-if not img_base64:
-  img_base64 = get_base64_image("cis_sepanggar.png")
-
 # --- LOAD DEDICATED REPORT LOGO AS BASE64 ---
 logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-if img_base64:
-  bg_css = f"""
-    .stApp {{
-        background: linear-gradient(rgba(15, 32, 39, 0.90), rgba(32, 58, 67, 0.90)), 
-                    url("{img_base64}");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
+# --- PROFESSIONAL STYLING (LARGER & BOLD TEXT, NO BACKGROUND IMAGE) ---
+bg_css = """
+    .stApp {
+        background-color: #0e1117;
         color: #f8f9fa;
-    }}
-    """
-else:
-  bg_css = """
-    .stApp {{
-        background: linear-gradient(rgba(15, 32, 39, 0.95), rgba(32, 58, 67, 0.95));
-        color: #f8f9fa;
-    }}
+        font-size: 16px;
+    }
     """
 
-# --- PROFESSIONAL INDUSTRIAL STYLING ---
 st.markdown(
     f"""
     <style>
     {bg_css}
-    h1, h2, h3 {{
-        color: #f8f9fa !important;
+    
+    /* Make all headings bigger and bold */
+    h1, h2, h3, h4, h5, h6 {{
+        color: #ffffff !important;
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-weight: 700 !important;
     }}
+    
+    h3 {{
+        font-size: 22px !important;
+        margin-top: 15px !important;
+    }}
+    
+    /* Make general body text, labels, and widget texts larger & bold */
+    p, label, span, div {{
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        color: #f1f3f5 !important;
+    }}
+    
+    /* Input field text styling */
+    input, textarea {{
+        font-size: 16px !important;
+        font-weight: 600 !important;
+    }}
+
     .corporate-header {{
         background: linear-gradient(90deg, rgba(31, 64, 104, 0.95) 0%, rgba(22, 36, 71, 0.95) 100%);
         padding: 20px 25px;
@@ -224,12 +230,14 @@ st.markdown(
     .corporate-header-text h1 {{
         color: #ffffff !important;
         margin: 0;
-        font-size: 24px;
+        font-size: 26px !important;
+        font-weight: 700 !important;
     }}
     .corporate-header-text p {{
         margin: 5px 0 0 0;
-        color: #dcdcdc;
-        font-size: 14px;
+        color: #e2e8f0 !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
     }}
     </style>
     """,
@@ -761,7 +769,6 @@ elif role == "Auditor":
         </html>
         """
 
-    # Exact compact component height so no extra white box appears underneath
     components.html(print_html, height=52)
 
     audit_df = pd.DataFrame()

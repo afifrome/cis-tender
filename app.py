@@ -171,6 +171,11 @@ if not logo_data_uri:
 st.markdown(
     """
     <style>
+    /* Hide the annoying 'Press enter to submit' instructions */
+    [data-testid="InputInstructions"] {
+        display: none !important;
+    }
+
     .stApp {
         background-color: #0e1117;
         color: #e2e8f0;

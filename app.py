@@ -188,11 +188,12 @@ st.markdown(
     }
     
     h3 {
-        font-size: 22px !important;
-        border-bottom: 2px solid #2d3748;
-        padding-bottom: 6px;
-        margin-top: 30px !important;
-        margin-bottom: 15px !important;
+        font-size: 24px !important;
+        border-bottom: 2px solid #3b82f6;
+        padding-bottom: 8px;
+        margin-top: 35px !important;
+        margin-bottom: 20px !important;
+        color: #60a5fa !important;
     }
     
     p, label, span {

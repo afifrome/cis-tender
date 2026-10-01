@@ -44,7 +44,7 @@ def init_db():
   conn = sqlite3.connect("cis_tender.db")
   cursor = conn.cursor()
 
-  # Submissions table
+  # Submissions table (updated with presence & declaration fields)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS tender_submissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,6 +57,8 @@ def init_db():
             verified_by TEXT,
             department TEXT,
             designation TEXT,
+            present_status TEXT,
+            declarations TEXT,
             timestamp TEXT,
             remarks TEXT
         )
@@ -137,7 +139,7 @@ def init_db():
     )
     conn.commit()
 
-  # Seed default admin user if empty (username: admin, password: password123)
+  # Seed default admin user if empty
   cursor.execute("SELECT COUNT(*) FROM users")
   if cursor.fetchone()[0] == 0:
     admin_pass = make_hash("password123")
@@ -167,33 +169,27 @@ logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-# --- POLISHED PROFESSIONAL DARK STYLING (LARGE SECTION BANNERS) ---
+# --- POLISHED PROFESSIONAL DARK STYLING ---
 st.markdown(
     """
     <style>
-    /* Hide the annoying 'Press enter to submit' instructions */
     [data-testid="InputInstructions"] {
         display: none !important;
     }
-
     .stApp {
         background-color: #0e1117;
         color: #e2e8f0;
         font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
     }
-    
     h1, h2, h3, h4, h5, h6 {
         color: #ffffff !important;
         font-weight: 700 !important;
     }
-    
     p, label, span {
         font-size: 17px !important;
         font-weight: 600 !important;
         color: #cbd5e1 !important;
     }
-
-    /* Prominent Section Header Banners */
     .section-title {
         font-size: 20px !important;
         font-weight: 700 !important;
@@ -207,7 +203,6 @@ st.markdown(
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         letter-spacing: 0.5px;
     }
-
     .corporate-header {
         background: linear-gradient(135deg, #1a365d 0%, #0f172a 100%);
         padding: 25px 30px;
@@ -221,7 +216,6 @@ st.markdown(
         gap: 25px;
         border: 1px solid #2d3748;
     }
-    
     .corporate-logo {
         max-height: 75px;
         max-width: 160px;
@@ -230,14 +224,12 @@ st.markdown(
         padding: 6px;
         border-radius: 6px;
     }
-    
     .corporate-header-text h1 {
         color: #ffffff !important;
         margin: 0;
         font-size: 26px !important;
         font-weight: 700 !important;
     }
-    
     .corporate-header-text p {
         margin: 6px 0 0 0;
         color: #94a3b8 !important;
@@ -249,7 +241,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- CORPORATE BANNER HEADER WITH LOGO ON LEFT ---
+# --- CORPORATE BANNER HEADER ---
 header_logo_html = (
     f'<img src="{logo_data_uri}" class="corporate-logo" alt="CIS Logo">'
     if logo_data_uri
@@ -272,7 +264,7 @@ st.markdown(
 if "logged_in" not in st.session_state:
   st.session_state["logged_in"] = False
   st.session_state["user"] = None
-  st.session_state["role"] = "Committee Member"  # Default public view
+  st.session_state["role"] = "Committee Member"
 
 # Sidebar Access Control
 st.sidebar.header("Portal Access Control")
@@ -329,14 +321,12 @@ raw_tenderers_df = pd.read_sql_query(
 dept_df = pd.read_sql_query("SELECT department_name FROM departments", conn)
 conn.close()
 
-# Prepare department options list for selectboxes
 dept_list = (
     ["-- Please Select Department --"] + dept_df["department_name"].tolist()
     if not dept_df.empty
     else ["-- Please Select Department --"]
 )
 
-# Format dataframe values for visual presentation
 tenderers_df = pd.DataFrame()
 if not raw_tenderers_df.empty:
   tenderers_df["Tenderer Name"] = raw_tenderers_df["tenderer_name"]
@@ -469,10 +459,15 @@ if role == "Committee Member":
         conn = sqlite3.connect("cis_tender.db")
         cursor = conn.cursor()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        declarations_str = (
+            f"Present Throughout: {present} | Checked Declarations: [1. Present"
+            f" Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified"
+            f" Amounts: {d3}, 4. Confirmed True: {d4}]"
+        )
         cursor.execute(
             """
-                    INSERT INTO tender_submissions (tender_no, tender_title, closing_date, opening_date, tenderer_name, amount, verified_by, department, designation, timestamp, remarks) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tender_submissions (tender_no, tender_title, closing_date, opening_date, tenderer_name, amount, verified_by, department, designation, present_status, declarations, timestamp, remarks) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
             (
                 t_no,
@@ -484,6 +479,8 @@ if role == "Committee Member":
                 full_name,
                 department,
                 designation,
+                present,
+                declarations_str,
                 timestamp,
                 remarks,
             ),
@@ -717,8 +714,8 @@ elif role == "Auditor":
             <tr>
                 <td>{idx + 1}</td>
                 <td>{row['tender_no']} - {row['tender_title']}</td>
-                <td>{row['verified_by']} ({row['department']})</td>
-                <td>{row['designation']}</td>
+                <td>{row['verified_by']}<br><small>{row['department']} / {row['designation']}</small></td>
+                <td><b>Present:</b> {row['present_status'] if row['present_status'] else 'Yes'}<br><small>{row['declarations'] if row['declarations'] else 'All declarations confirmed'}</small></td>
                 <td>{row['timestamp']}</td>
                 <td>{row['remarks'] if row['remarks'] else '-'}</td>
             </tr>
@@ -730,7 +727,8 @@ elif role == "Auditor":
             <title>CIS Tender Audit Verification Report</title>
             <style>
                 @page {{
-                    margin: 15mm;
+                    size: landscape;
+                    margin: 10mm;
                 }}
                 body {{ 
                     font-family: Arial, sans-serif; 
@@ -753,33 +751,34 @@ elif role == "Auditor":
                 }}
                 .header {{ 
                     text-align: center; 
-                    margin: 0 auto 25px auto; 
+                    margin: 0 auto 20px auto; 
                     border-bottom: 2px solid #1f4068; 
-                    padding-bottom: 15px; 
+                    padding-bottom: 12px; 
                     width: 100%; 
                 }}
                 .header h2 {{ 
                     margin: 5px auto 0 auto; 
                     color: #1f4068; 
-                    font-size: 20px; 
+                    font-size: 18px; 
                     text-align: center; 
                 }}
                 .header p {{ 
-                    margin: 4px auto; 
-                    font-size: 13px; 
+                    margin: 3px auto; 
+                    font-size: 12px; 
                     color: #555; 
                     text-align: center; 
                 }}
                 table {{ 
                     width: 100%; 
                     border-collapse: collapse; 
-                    margin-top: 15px; 
-                    font-size: 12px; 
+                    margin-top: 10px; 
+                    font-size: 11px; 
                 }}
                 th, td {{ 
                     border: 1px solid #ddd; 
-                    padding: 8px; 
+                    padding: 6px 8px; 
                     text-align: left; 
+                    vertical-align: top;
                 }}
                 th {{ 
                     background-color: #1f4068; 
@@ -789,8 +788,8 @@ elif role == "Auditor":
                     background-color: #f9f9f9; 
                 }}
                 .footer {{ 
-                    margin-top: 30px; 
-                    font-size: 11px; 
+                    margin-top: 20px; 
+                    font-size: 10px; 
                     text-align: right; 
                     color: #777; 
                 }}
@@ -812,26 +811,26 @@ elif role == "Auditor":
         </head>
         <body>
             <div class="toolbar">
-                <button class="print-btn" onclick="window.print();">🖨️ Print / Save Report as PDF</button>
+                <button class="print-btn" onclick="window.print();">🖨️ Print / Save Report as PDF (Landscape)</button>
             </div>
             
             <div class="report-container">
                 <div class="header">
                     {logo_html}
                     <h2>CEMENT INDUSTRIES (SABAH) SDN. BHD.</h2>
-                    <p>Sepanggar Industrial Estate | Official Tender Audit Verification Report</p>
+                    <p>Sepanggar Industrial Estate | Official Detailed Tender Audit Verification Report</p>
                     <p>Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                 </div>
-                <h3>Verification Trail Records</h3>
+                <h3>Detailed Verification Trail & Compliance Options</h3>
                 <table>
                     <thead>
                         <tr>
-                            <th>No.</th>
-                            <th>Tender Details</th>
-                            <th>Committee Member</th>
-                            <th>Designation</th>
-                            <th>Timestamp</th>
-                            <th>Remarks</th>
+                            <th style="width: 4%;">No.</th>
+                            <th style="width: 18%;">Tender Details</th>
+                            <th style="width: 20%;">Committee Member Info</th>
+                            <th style="width: 33%;">Attendance & Declarations Chosen</th>
+                            <th style="width: 13%;">Timestamp</th>
+                            <th style="width: 12%;">Remarks</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -839,7 +838,7 @@ elif role == "Auditor":
                     </tbody>
                 </table>
                 <div class="footer">
-                    <p>This is a system-generated audit report from the CIS Electronic Tender Portal.</p>
+                    <p>This is a system-generated detailed compliance report from the CIS Electronic Tender Portal.</p>
                 </div>
             </div>
         </body>
@@ -852,11 +851,11 @@ elif role == "Auditor":
     audit_df["ID"] = raw_audit_df["id"]
     audit_df["Tender No."] = raw_audit_df["tender_no"]
     audit_df["Tender Title"] = raw_audit_df["tender_title"]
-    audit_df["Closing Date"] = raw_audit_df["closing_date"]
-    audit_df["Opening Date"] = raw_audit_df["opening_date"]
     audit_df["Verified By"] = raw_audit_df["verified_by"]
     audit_df["Department"] = raw_audit_df["department"]
     audit_df["Designation"] = raw_audit_df["designation"]
+    audit_df["Present"] = raw_audit_df["present_status"]
+    audit_df["Declarations Checked"] = raw_audit_df["declarations"]
     audit_df["Timestamp"] = raw_audit_df["timestamp"]
     audit_df["Remarks"] = raw_audit_df["remarks"]
 
@@ -874,12 +873,6 @@ elif role == "Auditor":
             "Tender Title": st.column_config.TextColumn(
                 "Tender Title", width="medium"
             ),
-            "Closing Date": st.column_config.TextColumn(
-                "Closing Date", width="medium"
-            ),
-            "Opening Date": st.column_config.TextColumn(
-                "Opening Date", width="medium"
-            ),
             "Verified By": st.column_config.TextColumn(
                 "Verified By", width="medium"
             ),
@@ -889,14 +882,18 @@ elif role == "Auditor":
             "Designation": st.column_config.TextColumn(
                 "Designation", width="medium"
             ),
+            "Present": st.column_config.TextColumn("Present", width="small"),
+            "Declarations Checked": st.column_config.TextColumn(
+                "Declarations Checked", width="large"
+            ),
             "Timestamp": st.column_config.TextColumn(
                 "Timestamp", width="medium"
             ),
-            "Remarks": st.column_config.TextColumn("Remarks", width="large"),
+            "Remarks": st.column_config.TextColumn("Remarks", width="medium"),
         },
     )
 
-    # --- AUDITOR RECORD MANAGEMENT UTILITIES WITH 2-STEP CONFIRMATION ---
+    # --- AUDITOR RECORD MANAGEMENT UTILITIES ---
     st.markdown("### Audit Trail Record Management")
     col_del1, col_del2 = st.columns(2)
 

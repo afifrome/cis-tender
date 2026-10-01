@@ -16,7 +16,7 @@ def check_password(password, hashed_password):
   return make_hash(password) == hashed_password
 
 
-# Format amount to RM currency style (e.g. 1245800 -> RM 1,245,800.00)
+# Format amount to RM currency style
 def format_rm(val):
   try:
     clean_val = str(val).replace("RM", "").replace(",", "").strip()
@@ -26,7 +26,7 @@ def format_rm(val):
     return val
 
 
-# Convert local image to Base64 with proper MIME type handling
+# Convert local image to Base64
 def get_base64_image(file_path):
   try:
     with open(file_path, "rb") as f:
@@ -39,12 +39,11 @@ def get_base64_image(file_path):
     return None
 
 
-# Initialize Database for Tender Management with Users Table
+# Initialize Database and handle schema migrations safely
 def init_db():
   conn = sqlite3.connect("cis_tender.db")
   cursor = conn.cursor()
 
-  # Submissions table (updated with presence & declaration fields)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS tender_submissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,14 +56,22 @@ def init_db():
             verified_by TEXT,
             department TEXT,
             designation TEXT,
-            present_status TEXT,
-            declarations TEXT,
             timestamp TEXT,
             remarks TEXT
         )
     """)
 
-  # Active Tender configuration table
+  # Safe migration: add columns if they don't exist yet in older tables
+  cursor.execute("PRAGMA table_info(tender_submissions)")
+  existing_columns = [col[1] for col in cursor.fetchall()]
+
+  if "present_status" not in existing_columns:
+    cursor.execute(
+        "ALTER TABLE tender_submissions ADD COLUMN present_status TEXT"
+    )
+  if "declarations" not in existing_columns:
+    cursor.execute("ALTER TABLE tender_submissions ADD COLUMN declarations TEXT")
+
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS active_tender (
             tender_no TEXT PRIMARY KEY,
@@ -74,7 +81,6 @@ def init_db():
         )
     """)
 
-  # Tenderers summary table
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS tenderers_summary (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,7 +89,6 @@ def init_db():
         )
     """)
 
-  # Departments table
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS departments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +96,6 @@ def init_db():
         )
     """)
 
-  # Users table for secure RBAC
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -102,7 +106,7 @@ def init_db():
 
   conn.commit()
 
-  # Seed default active tender if empty
+  # Seed defaults if empty
   cursor.execute("SELECT COUNT(*) FROM active_tender")
   if cursor.fetchone()[0] == 0:
     cursor.execute(
@@ -125,7 +129,6 @@ def init_db():
         default_tenderers,
     )
 
-  # Seed default departments if empty
   cursor.execute("SELECT COUNT(*) FROM departments")
   if cursor.fetchone()[0] == 0:
     default_depts = [
@@ -137,9 +140,7 @@ def init_db():
     cursor.executemany(
         "INSERT INTO departments (department_name) VALUES (?)", default_depts
     )
-    conn.commit()
 
-  # Seed default admin user if empty
   cursor.execute("SELECT COUNT(*) FROM users")
   if cursor.fetchone()[0] == 0:
     admin_pass = make_hash("password123")
@@ -151,8 +152,8 @@ def init_db():
         "INSERT INTO users VALUES (?, ?, ?)",
         ("auditor", auditor_pass, "Auditor"),
     )
-    conn.commit()
 
+  conn.commit()
   conn.close()
 
 
@@ -164,84 +165,38 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- LOAD DEDICATED REPORT LOGO AS BASE64 ---
 logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
   logo_data_uri = get_base64_image("cis_logo.png")
 
-# --- POLISHED PROFESSIONAL DARK STYLING ---
 st.markdown(
     """
     <style>
-    [data-testid="InputInstructions"] {
-        display: none !important;
-    }
-    .stApp {
-        background-color: #0e1117;
-        color: #e2e8f0;
-        font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
-    }
-    h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
-        font-weight: 700 !important;
-    }
-    p, label, span {
-        font-size: 17px !important;
-        font-weight: 600 !important;
-        color: #cbd5e1 !important;
-    }
+    [data-testid="InputInstructions"] { display: none !important; }
+    .stApp { background-color: #0e1117; color: #e2e8f0; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; }
+    h1, h2, h3, h4, h5, h6 { color: #ffffff !important; font-weight: 700 !important; }
+    p, label, span { font-size: 17px !important; font-weight: 600 !important; color: #cbd5e1 !important; }
     .section-title {
-        font-size: 20px !important;
-        font-weight: 700 !important;
-        color: #ffffff !important;
+        font-size: 20px !important; font-weight: 700 !important; color: #ffffff !important;
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        padding: 12px 18px;
-        border-radius: 8px;
-        border-left: 5px solid #3b82f6;
-        margin-top: 35px !important;
-        margin-bottom: 20px !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        letter-spacing: 0.5px;
+        padding: 12px 18px; border-radius: 8px; border-left: 5px solid #3b82f6;
+        margin-top: 35px !important; margin-bottom: 20px !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3); letter-spacing: 0.5px;
     }
     .corporate-header {
         background: linear-gradient(135deg, #1a365d 0%, #0f172a 100%);
-        padding: 25px 30px;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        border-left: 6px solid #f39c12;
-        display: flex;
-        align-items: center;
-        gap: 25px;
-        border: 1px solid #2d3748;
+        padding: 25px 30px; border-radius: 10px; color: white; margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4); border-left: 6px solid #f39c12;
+        display: flex; align-items: center; gap: 25px; border: 1px solid #2d3748;
     }
-    .corporate-logo {
-        max-height: 75px;
-        max-width: 160px;
-        object-fit: contain;
-        background: white;
-        padding: 6px;
-        border-radius: 6px;
-    }
-    .corporate-header-text h1 {
-        color: #ffffff !important;
-        margin: 0;
-        font-size: 26px !important;
-        font-weight: 700 !important;
-    }
-    .corporate-header-text p {
-        margin: 6px 0 0 0;
-        color: #94a3b8 !important;
-        font-size: 15px !important;
-        font-weight: 500 !important;
-    }
+    .corporate-logo { max-height: 75px; max-width: 160px; object-fit: contain; background: white; padding: 6px; border-radius: 6px; }
+    .corporate-header-text h1 { color: #ffffff !important; margin: 0; font-size: 26px !important; font-weight: 700 !important; }
+    .corporate-header-text p { margin: 6px 0 0 0; color: #94a3b8 !important; font-size: 15px !important; font-weight: 500 !important; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# --- CORPORATE BANNER HEADER ---
 header_logo_html = (
     f'<img src="{logo_data_uri}" class="corporate-logo" alt="CIS Logo">'
     if logo_data_uri
@@ -260,13 +215,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Session state handling for authentication
 if "logged_in" not in st.session_state:
   st.session_state["logged_in"] = False
   st.session_state["user"] = None
   st.session_state["role"] = "Committee Member"
 
-# Sidebar Access Control
 st.sidebar.header("Portal Access Control")
 
 if not st.session_state["logged_in"]:
@@ -312,7 +265,6 @@ else:
     st.session_state["role"] = "Committee Member"
     st.rerun()
 
-# Fetch active tender details, tenderers, and departments from database
 conn = sqlite3.connect("cis_tender.db")
 active_tender_df = pd.read_sql_query("SELECT * FROM active_tender", conn)
 raw_tenderers_df = pd.read_sql_query(
@@ -364,20 +316,7 @@ if role == "Committee Member":
     display_df = tenderers_df.copy()
     display_df.insert(0, "No.", range(1, len(display_df) + 1))
     st.dataframe(
-        display_df,
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "No.": st.column_config.NumberColumn(
-                "No.", width="small", format="%d"
-            ),
-            "Tenderer Name": st.column_config.TextColumn(
-                "Tenderer Name", width="medium"
-            ),
-            "Tendered Amount (RM)": st.column_config.TextColumn(
-                "Tendered Amount (RM)", width="medium"
-            ),
-        },
+        display_df, hide_index=True, use_container_width=True
     )
   else:
     st.info("No tender submissions listed yet.")
@@ -529,31 +468,14 @@ elif role == "Admin":
     if not tenderers_df.empty:
       admin_display_df = tenderers_df.copy()
       admin_display_df.insert(0, "No.", range(1, len(admin_display_df) + 1))
-      st.dataframe(
-          admin_display_df,
-          hide_index=True,
-          use_container_width=True,
-          column_config={
-              "No.": st.column_config.NumberColumn(
-                  "No.", width="small", format="%d"
-              ),
-              "Tenderer Name": st.column_config.TextColumn(
-                  "Tenderer Name", width="medium"
-              ),
-              "Tendered Amount (RM)": st.column_config.TextColumn(
-                  "Tendered Amount (RM)", width="medium"
-              ),
-          },
-      )
+      st.dataframe(admin_display_df, hide_index=True, use_container_width=True)
     else:
       st.info("No tenderers listed.")
 
     with st.form("add_tenderer_form"):
       st.markdown("**Add Vendor Entry**")
       new_tenderer_name = st.text_input("Tenderer Company Name")
-      new_amount = st.text_input(
-          "Tendered Amount (RM) - e.g. 1245800.00 or 1245800"
-      )
+      new_amount = st.text_input("Tendered Amount (RM)")
       add_btn = st.form_submit_button("Add Vendor to Summary")
 
       if add_btn and new_tenderer_name and new_amount:
@@ -584,19 +506,7 @@ elif role == "Admin":
       dept_display_df = dept_df.copy()
       dept_display_df.columns = ["Department Name"]
       dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
-      st.dataframe(
-          dept_display_df,
-          use_container_width=True,
-          hide_index=True,
-          column_config={
-              "No.": st.column_config.NumberColumn(
-                  "No.", width="small", format="%d"
-              ),
-              "Department Name": st.column_config.TextColumn(
-                  "Department Name", width="large"
-              ),
-          },
-      )
+      st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
 
     col_d1, col_d2 = st.columns(2)
     with col_d1:
@@ -652,22 +562,7 @@ elif role == "Admin":
       users_display_df.insert(
           0, "Item No.", range(1, len(users_display_df) + 1)
       )
-      st.dataframe(
-          users_display_df,
-          use_container_width=True,
-          hide_index=True,
-          column_config={
-              "Item No.": st.column_config.NumberColumn(
-                  "Item No.", width="small", format="%d"
-              ),
-              "Username": st.column_config.TextColumn(
-                  "Username", width="medium"
-              ),
-              "Assigned Role": st.column_config.TextColumn(
-                  "Assigned Role", width="medium"
-              ),
-          },
-      )
+      st.dataframe(users_display_df, use_container_width=True, hide_index=True)
 
       with st.form("edit_user_form"):
         st.markdown("**Reset User Password**")
@@ -710,14 +605,28 @@ elif role == "Auditor":
 
     html_rows = ""
     for idx, row in raw_audit_df.iterrows():
+      # Safe fallback check for legacy rows lacking new columns
+      p_status = (
+          row["present_status"]
+          if "present_status" in raw_audit_df.columns
+          and pd.notna(row["present_status"])
+          else "Yes"
+      )
+      decls = (
+          row["declarations"]
+          if "declarations" in raw_audit_df.columns
+          and pd.notna(row["declarations"])
+          else "All declarations confirmed"
+      )
+
       html_rows += f"""
             <tr>
                 <td>{idx + 1}</td>
                 <td>{row['tender_no']} - {row['tender_title']}</td>
                 <td>{row['verified_by']}<br><small>{row['department']} / {row['designation']}</small></td>
-                <td><b>Present:</b> {row['present_status'] if row['present_status'] else 'Yes'}<br><small>{row['declarations'] if row['declarations'] else 'All declarations confirmed'}</small></td>
+                <td><b>Present:</b> {p_status}<br><small>{decls}</small></td>
                 <td>{row['timestamp']}</td>
-                <td>{row['remarks'] if row['remarks'] else '-'}</td>
+                <td>{row['remarks'] if pd.notna(row['remarks']) and row['remarks'] else '-'}</td>
             </tr>
             """
 
@@ -726,87 +635,24 @@ elif role == "Auditor":
         <head>
             <title>CIS Tender Audit Verification Report</title>
             <style>
-                @page {{
-                    size: landscape;
-                    margin: 10mm;
-                }}
-                body {{ 
-                    font-family: Arial, sans-serif; 
-                    color: #333; 
-                    margin: 0; 
-                    background-color: transparent; 
-                    text-align: left; 
-                }}
-                .toolbar {{
-                    display: flex;
-                    justify-content: flex-end;
-                    margin-bottom: 10px;
-                }}
-                .report-container {{
-                    display: none;
-                }}
+                @page {{ size: landscape; margin: 10mm; }}
+                body {{ font-family: Arial, sans-serif; color: #333; margin: 0; background-color: transparent; text-align: left; }}
+                .toolbar {{ display: flex; justify-content: flex-end; margin-bottom: 10px; }}
+                .report-container {{ display: none; }}
                 @media print {{
                     .toolbar {{ display: none; }}
                     .report-container {{ display: block !important; }}
                 }}
-                .header {{ 
-                    text-align: center; 
-                    margin: 0 auto 20px auto; 
-                    border-bottom: 2px solid #1f4068; 
-                    padding-bottom: 12px; 
-                    width: 100%; 
-                }}
-                .header h2 {{ 
-                    margin: 5px auto 0 auto; 
-                    color: #1f4068; 
-                    font-size: 18px; 
-                    text-align: center; 
-                }}
-                .header p {{ 
-                    margin: 3px auto; 
-                    font-size: 12px; 
-                    color: #555; 
-                    text-align: center; 
-                }}
-                table {{ 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                    margin-top: 10px; 
-                    font-size: 11px; 
-                }}
-                th, td {{ 
-                    border: 1px solid #ddd; 
-                    padding: 6px 8px; 
-                    text-align: left; 
-                    vertical-align: top;
-                }}
-                th {{ 
-                    background-color: #1f4068; 
-                    color: white; 
-                }}
-                tr:nth-child(even) {{ 
-                    background-color: #f9f9f9; 
-                }}
-                .footer {{ 
-                    margin-top: 20px; 
-                    font-size: 10px; 
-                    text-align: right; 
-                    color: #777; 
-                }}
-                .print-btn {{ 
-                    background-color: #1f4068; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    border: none; 
-                    border-radius: 4px; 
-                    cursor: pointer; 
-                    font-size: 14px; 
-                    font-weight: bold;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                }}
-                .print-btn:hover {{ 
-                    background-color: #163254; 
-                }}
+                .header {{ text-align: center; margin: 0 auto 20px auto; border-bottom: 2px solid #1f4068; padding-bottom: 12px; width: 100%; }}
+                .header h2 {{ margin: 5px auto 0 auto; color: #1f4068; font-size: 18px; text-align: center; }}
+                .header p {{ margin: 3px auto; font-size: 12px; color: #555; text-align: center; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
+                th, td {{ border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }}
+                th {{ background-color: #1f4068; color: white; }}
+                tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                .footer {{ margin-top: 20px; font-size: 10px; text-align: right; color: #777; }}
+                .print-btn {{ background-color: #1f4068; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
+                .print-btn:hover {{ background-color: #163254; }}
             </style>
         </head>
         <body>
@@ -854,46 +700,21 @@ elif role == "Auditor":
     audit_df["Verified By"] = raw_audit_df["verified_by"]
     audit_df["Department"] = raw_audit_df["department"]
     audit_df["Designation"] = raw_audit_df["designation"]
-    audit_df["Present"] = raw_audit_df["present_status"]
-    audit_df["Declarations Checked"] = raw_audit_df["declarations"]
+    audit_df["Present"] = (
+        raw_audit_df["present_status"]
+        if "present_status" in raw_audit_df.columns
+        else "Yes"
+    )
+    audit_df["Declarations Checked"] = (
+        raw_audit_df["declarations"]
+        if "declarations" in raw_audit_df.columns
+        else "-"
+    )
     audit_df["Timestamp"] = raw_audit_df["timestamp"]
     audit_df["Remarks"] = raw_audit_df["remarks"]
 
-    st.dataframe(
-        audit_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "ID": st.column_config.NumberColumn(
-                "ID", width="small", format="%d"
-            ),
-            "Tender No.": st.column_config.TextColumn(
-                "Tender No.", width="small"
-            ),
-            "Tender Title": st.column_config.TextColumn(
-                "Tender Title", width="medium"
-            ),
-            "Verified By": st.column_config.TextColumn(
-                "Verified By", width="medium"
-            ),
-            "Department": st.column_config.TextColumn(
-                "Department", width="small"
-            ),
-            "Designation": st.column_config.TextColumn(
-                "Designation", width="medium"
-            ),
-            "Present": st.column_config.TextColumn("Present", width="small"),
-            "Declarations Checked": st.column_config.TextColumn(
-                "Declarations Checked", width="large"
-            ),
-            "Timestamp": st.column_config.TextColumn(
-                "Timestamp", width="medium"
-            ),
-            "Remarks": st.column_config.TextColumn("Remarks", width="medium"),
-        },
-    )
+    st.dataframe(audit_df, use_container_width=True, hide_index=True)
 
-    # --- AUDITOR RECORD MANAGEMENT UTILITIES ---
     st.markdown("### Audit Trail Record Management")
     col_del1, col_del2 = st.columns(2)
 

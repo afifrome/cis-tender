@@ -601,11 +601,10 @@ elif role == "Auditor":
   if not raw_audit_df.empty:
     logo_html = ""
     if logo_data_uri:
-      logo_html = f'<div style="text-align: center; margin-bottom: 15px;"><img src="{logo_data_uri}" style="max-height: 80px; max-width: 220px; object-fit: contain; mix-blend-mode: multiply; display: inline-block;" alt="CIS Logo"></div>'
+      logo_html = f'<img src="{logo_data_uri}" style="max-height: 55px; max-width: 140px; object-fit: contain; display: inline-block; vertical-align: middle;" alt="CIS Logo">'
 
     html_rows = ""
     for idx, row in raw_audit_df.iterrows():
-      # Safe fallback check for legacy rows lacking new columns
       p_status = (
           row["present_status"]
           if "present_status" in raw_audit_df.columns
@@ -630,6 +629,8 @@ elif role == "Auditor":
             </tr>
             """
 
+    current_gen_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     print_html = f"""
         <html>
         <head>
@@ -643,13 +644,16 @@ elif role == "Auditor":
                     .toolbar {{ display: none; }}
                     .report-container {{ display: block !important; }}
                 }}
-                .header {{ text-align: center; margin: 0 auto 20px auto; border-bottom: 2px solid #1f4068; padding-bottom: 12px; width: 100%; }}
-                .header h2 {{ margin: 5px auto 0 auto; color: #1f4068; font-size: 18px; text-align: center; }}
-                .header p {{ margin: 3px auto; font-size: 12px; color: #555; text-align: center; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
-                th, td {{ border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }}
-                th {{ background-color: #1f4068; color: white; }}
-                tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                .header-table {{ width: 100%; border-collapse: collapse; border: none; margin-bottom: 15px; border-bottom: 2px solid #1f4068; padding-bottom: 8px; }}
+                .header-table td {{ border: none; padding: 0; vertical-align: middle; }}
+                .header-title-box {{ text-align: right; }}
+                .header-title-box h2 {{ margin: 0; color: #1f4068; font-size: 16px; font-weight: bold; letter-spacing: 0.5px; }}
+                .header-title-box p {{ margin: 3px 0 0 0; font-size: 11px; color: #444; font-weight: bold; text-transform: uppercase; }}
+                .doc-ref {{ font-size: 10px; color: #555; text-align: right; margin-top: 4px; }}
+                table.data-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
+                table.data-table th, table.data-table td {{ border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }}
+                table.data-table th {{ background-color: #1f4068; color: white; }}
+                table.data-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
                 .footer {{ margin-top: 20px; font-size: 10px; text-align: right; color: #777; }}
                 .print-btn {{ background-color: #1f4068; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
                 .print-btn:hover {{ background-color: #163254; }}
@@ -661,14 +665,20 @@ elif role == "Auditor":
             </div>
             
             <div class="report-container">
-                <div class="header">
-                    {logo_html}
-                    <h2>CEMENT INDUSTRIES (SABAH) SDN. BHD.</h2>
-                    <p>Sepanggar Industrial Estate | Official Detailed Tender Audit Verification Report</p>
-                    <p>Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                </div>
-                <h3>Detailed Verification Trail & Compliance Options</h3>
-                <table>
+                <table class="header-table">
+                    <tr>
+                        <td style="width: 25%;">
+                            {logo_html}
+                        </td>
+                        <td style="width: 75%;" class="header-title-box">
+                            <h2>CEMENT INDUSTRIES (SABAH) SDN. BHD.</h2>
+                            <p>SEPANGGAR INDUSTRIAL ESTATE &bull; OFFICIAL TENDER AUDIT VERIFICATION REGISTER</p>
+                            <div class="doc-ref">Document Ref: CIS/OTC/AUD/2026/10 | Generated: {current_gen_time}</div>
+                        </td>
+                    </tr>
+                </table>
+                
+                <table class="data-table">
                     <thead>
                         <tr>
                             <th style="width: 4%;">No.</th>

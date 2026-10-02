@@ -9,42 +9,42 @@ import streamlit.components.v1 as components
 
 # Hash passwords securely
 def make_hash(password):
-  return hashlib.sha256(str.encode(password)).hexdigest()
+    return hashlib.sha256(str.encode(password)).hexdigest()
 
 
 def check_password(password, hashed_password):
-  return make_hash(password) == hashed_password
+    return make_hash(password) == hashed_password
 
 
 # Format amount to RM currency style
 def format_rm(val):
-  try:
-    clean_val = str(val).replace("RM", "").replace(",", "").strip()
-    f_val = float(clean_val)
-    return f"RM {f_val:,.2f}"
-  except ValueError:
-    return val
+    try:
+        clean_val = str(val).replace("RM", "").replace(",", "").strip()
+        f_val = float(clean_val)
+        return f"RM {f_val:,.2f}"
+    except ValueError:
+        return val
 
 
 # Convert local image to Base64
 def get_base64_image(file_path):
-  try:
-    with open(file_path, "rb") as f:
-      data = f.read()
-    ext = file_path.split(".")[-1].lower()
-    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
-    encoded = base64.b64encode(data).decode()
-    return f"data:{mime};base64,{encoded}"
-  except Exception:
-    return None
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        ext = file_path.split(".")[-1].lower()
+        mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+        encoded = base64.b64encode(data).decode()
+        return f"data:{mime};base64,{encoded}"
+    except Exception:
+        return None
 
 
 # Initialize Database and handle schema migrations safely
 def init_db():
-  conn = sqlite3.connect("cis_tender.db")
-  cursor = conn.cursor()
+    conn = sqlite3.connect("cis_tender.db")
+    cursor = conn.cursor()
 
-  cursor.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS tender_submissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tender_no TEXT,
@@ -61,18 +61,18 @@ def init_db():
         )
     """)
 
-  # Safe migration: add columns if they don't exist yet in older tables
-  cursor.execute("PRAGMA table_info(tender_submissions)")
-  existing_columns = [col[1] for col in cursor.fetchall()]
+    # Safe migration: add columns if they don't exist yet in older tables
+    cursor.execute("PRAGMA table_info(tender_submissions)")
+    existing_columns = [col[1] for col in cursor.fetchall()]
 
-  if "present_status" not in existing_columns:
-    cursor.execute(
-        "ALTER TABLE tender_submissions ADD COLUMN present_status TEXT"
-    )
-  if "declarations" not in existing_columns:
-    cursor.execute("ALTER TABLE tender_submissions ADD COLUMN declarations TEXT")
+    if "present_status" not in existing_columns:
+        cursor.execute(
+            "ALTER TABLE tender_submissions ADD COLUMN present_status TEXT"
+        )
+    if "declarations" not in existing_columns:
+        cursor.execute("ALTER TABLE tender_submissions ADD COLUMN declarations TEXT")
 
-  cursor.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS active_tender (
             tender_no TEXT PRIMARY KEY,
             tender_title TEXT,
@@ -81,22 +81,29 @@ def init_db():
         )
     """)
 
-  cursor.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS tenderers_summary (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tender_no TEXT,
             tenderer_name TEXT,
             amount TEXT
         )
     """)
+    
+    # Migration for tenderers_summary to support multiple tenders if missing tender_no
+    cursor.execute("PRAGMA table_info(tenderers_summary)")
+    summary_columns = [col[1] for col in cursor.fetchall()]
+    if "tender_no" not in summary_columns:
+        cursor.execute("ALTER TABLE tenderers_summary ADD COLUMN tender_no TEXT")
 
-  cursor.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS departments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             department_name TEXT UNIQUE
         )
     """)
 
-  cursor.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             password TEXT,
@@ -104,57 +111,67 @@ def init_db():
         )
     """)
 
-  conn.commit()
+    conn.commit()
 
-  # Seed defaults if empty
-  cursor.execute("SELECT COUNT(*) FROM active_tender")
-  if cursor.fetchone()[0] == 0:
-    cursor.execute(
-        "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
-        (
-            "T2027/001",
-            "Supply of Clinker",
-            "9 October 2026, 10:00 AM",
-            "9 October 2026, 10:30 AM",
-        ),
-    )
-    default_tenderers = [
-        ("ABC Sdn. Bhd.", "1245600.00"),
-        ("XYZ Trading Sdn. Bhd.", "1287500.00"),
-        ("Maju Engineering Sdn. Bhd.", "1318900.00"),
-        ("PQR Resources Sdn. Bhd.", "1356400.00"),
-    ]
-    cursor.executemany(
-        "INSERT INTO tenderers_summary (tenderer_name, amount) VALUES (?, ?)",
-        default_tenderers,
-    )
+    # Seed defaults if empty
+    cursor.execute("SELECT COUNT(*) FROM active_tender")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
+            (
+                "T2027/001",
+                "Supply of Clinker",
+                "9 October 2026, 10:00 AM",
+                "9 October 2026, 10:30 AM",
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
+            (
+                "T2027/002",
+                "Transportation & Logistics Services",
+                "9 October 2026, 10:00 AM",
+                "9 October 2026, 10:30 AM",
+            ),
+        )
+        default_tenderers = [
+            ("T2027/001", "ABC Sdn. Bhd.", "1245600.00"),
+            ("T2027/001", "XYZ Trading Sdn. Bhd.", "1287500.00"),
+            ("T2027/001", "Maju Engineering Sdn. Bhd.", "1318900.00"),
+            ("T2027/002", "Borneo Logistics Sdn Bhd", "45000.00"),
+            ("T2027/002", "Sabah Haulage Express", "42500.00"),
+        ]
+        cursor.executemany(
+            "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
+            default_tenderers,
+        )
 
-  cursor.execute("SELECT COUNT(*) FROM departments")
-  if cursor.fetchone()[0] == 0:
-    default_depts = [
-        ("Finance",),
-        ("Procurement",),
-        ("IT",),
-        ("Operations",),
-    ]
-    cursor.executemany(
-        "INSERT INTO departments (department_name) VALUES (?)", default_depts
-    )
+    cursor.execute("SELECT COUNT(*) FROM departments")
+    if cursor.fetchone()[0] == 0:
+        default_depts = [
+            ("Finance",),
+            ("Procurement",),
+            ("IT",),
+            ("Operations",),
+        ]
+        cursor.executemany(
+            "INSERT INTO departments (department_name) VALUES (?)", default_depts
+        )
 
-  cursor.execute("SELECT COUNT(*) FROM users")
-  if cursor.fetchone()[0] == 0:
-    admin_pass = make_hash("password123")
-    auditor_pass = make_hash("audit123")
-    cursor.execute(
-        "INSERT INTO users VALUES (?, ?, ?)", ("admin", admin_pass, "Admin")
-    )
-    cursor.execute(
-        "INSERT INTO users VALUES (?, ?, ?)",
-        ("auditor", auditor_pass, "Auditor"),
-    )
+    cursor.execute("SELECT COUNT(*) FROM users")
+    if cursor.fetchone()[0] == 0:
+        admin_pass = make_hash("password123")
+        auditor_pass = make_hash("audit123")
+        cursor.execute(
+            "INSERT INTO users VALUES (?, ?, ?)", ("admin", admin_pass, "Admin")
+        )
+        cursor.execute(
+            "INSERT INTO users VALUES (?, ?, ?)",
+            ("auditor", auditor_pass, "Auditor"),
+        )
 
-  conn.commit()
-  conn.close()
+    conn.commit()
+    conn.close()
 
 
 init_db()
@@ -167,7 +184,7 @@ st.set_page_config(
 
 logo_data_uri = get_base64_image("cis_logo.jpg")
 if not logo_data_uri:
-  logo_data_uri = get_base64_image("cis_logo.png")
+    logo_data_uri = get_base64_image("cis_logo.png")
 
 st.markdown(
     """
@@ -216,60 +233,57 @@ st.markdown(
 )
 
 if "logged_in" not in st.session_state:
-  st.session_state["logged_in"] = False
-  st.session_state["user"] = None
-  st.session_state["role"] = "Committee Member"
+    st.session_state["logged_in"] = False
+    st.session_state["user"] = None
+    st.session_state["role"] = "Committee Member"
 
 st.sidebar.header("Portal Access Control")
 
 if not st.session_state["logged_in"]:
-  st.sidebar.markdown(
-      "**Public Portal Mode**\nCommittee Member Verification Access."
-  )
-  st.sidebar.markdown("---")
-  with st.sidebar.form("login_form"):
-    st.subheader("Staff Secure Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    login_btn = st.form_submit_button("Authenticate")
+    st.sidebar.markdown(
+        "**Public Portal Mode**\nCommittee Member Verification Access."
+    )
+    st.sidebar.markdown("---")
+    with st.sidebar.form("login_form"):
+        st.subheader("Staff Secure Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        login_btn = st.form_submit_button("Authenticate")
 
-    if login_btn:
-      conn = sqlite3.connect("cis_tender.db")
-      cursor = conn.cursor()
-      cursor.execute(
-          "SELECT password, role FROM users WHERE username = ?", (username,)
-      )
-      user_record = cursor.fetchone()
-      conn.close()
+        if login_btn:
+            conn = sqlite3.connect("cis_tender.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT password, role FROM users WHERE username = ?", (username,)
+            )
+            user_record = cursor.fetchone()
+            conn.close()
 
-      if user_record and check_password(password, user_record[0]):
-        st.session_state["logged_in"] = True
-        st.session_state["user"] = username
-        st.session_state["role"] = user_record[1]
-        st.success(f"Welcome, {username}!")
-        st.rerun()
-      else:
-        st.error("Invalid credentials.")
+            if user_record and check_password(password, user_record[0]):
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = username
+                st.session_state["role"] = user_record[1]
+                st.success(f"Welcome, {username}!")
+                st.rerun()
+            else:
+                st.error("Invalid credentials.")
 
-  role = "Committee Member"
+    role = "Committee Member"
 else:
-  st.sidebar.success(
-      f"Authenticated User:\n**{st.session_state['user']}**"
-      f" \n*(Role: {st.session_state['role']})*"
-  )
-  role = st.session_state["role"]
-  st.sidebar.markdown("---")
-  if st.sidebar.button("Sign Out", use_container_width=True):
-    st.session_state["logged_in"] = False
-    st.session_state["user"] = None
-    st.session_state["role"] = "Committee Member"
-    st.rerun()
+    st.sidebar.success(
+        f"Authenticated User:\n**{st.session_state['user']}**"
+        f" \n*(Role: {st.session_state['role']})*"
+    )
+    role = st.session_state["role"]
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Sign Out", use_container_width=True):
+        st.session_state["logged_in"] = False
+        st.session_state["user"] = None
+        st.session_state["role"] = "Committee Member"
+        st.rerun()
 
 conn = sqlite3.connect("cis_tender.db")
-active_tender_df = pd.read_sql_query("SELECT * FROM active_tender", conn)
-raw_tenderers_df = pd.read_sql_query(
-    "SELECT tenderer_name, amount FROM tenderers_summary", conn
-)
+active_tenders_df = pd.read_sql_query("SELECT * FROM active_tender", conn)
 dept_df = pd.read_sql_query("SELECT department_name FROM departments", conn)
 conn.close()
 
@@ -279,359 +293,394 @@ dept_list = (
     else ["-- Please Select Department --"]
 )
 
-tenderers_df = pd.DataFrame()
-if not raw_tenderers_df.empty:
-  tenderers_df["Tenderer Name"] = raw_tenderers_df["tenderer_name"]
-  tenderers_df["Tendered Amount (RM)"] = raw_tenderers_df["amount"].apply(
-      format_rm
-  )
-
-if not active_tender_df.empty:
-  t_no = active_tender_df.iloc[0]["tender_no"]
-  t_title = active_tender_df.iloc[0]["tender_title"]
-  t_close = active_tender_df.iloc[0]["closing_date"]
-  t_open = active_tender_df.iloc[0]["opening_date"]
-else:
-  t_no, t_title, t_close, t_open = "", "", "", ""
-
-# --- VIEW: COMMITTEE MEMBER (PUBLIC FORM) ---
+# --- VIEW: COMMITTEE MEMBER (PUBLIC FORM WITH TABS FOR CONCURRENT EVENTS) ---
 if role == "Committee Member":
-  st.markdown(
-      '<div class="section-title">Section 1: Active Tender Details</div>',
-      unsafe_allow_html=True,
-  )
-  col1, col2 = st.columns(2)
-  with col1:
-    st.text_input("Tender No.", value=t_no, disabled=True)
-    st.text_input("Tender Closing Date & Time", value=t_close, disabled=True)
-  with col2:
-    st.text_input("Tender Title", value=t_title, disabled=True)
-    st.text_input("Tender Opening Date & Time", value=t_open, disabled=True)
-
-  st.markdown(
-      '<div class="section-title">Section 2: Tender Submission Summary</div>',
-      unsafe_allow_html=True,
-  )
-  if not tenderers_df.empty:
-    display_df = tenderers_df.copy()
-    display_df.insert(0, "No.", range(1, len(display_df) + 1))
-    st.dataframe(
-        display_df, hide_index=True, use_container_width=True
-    )
-  else:
-    st.info("No tender submissions listed yet.")
-
-  st.markdown(
-      '<div class="section-title">Section 3: Committee Member Details</div>',
-      unsafe_allow_html=True,
-  )
-  with st.form("verification_form"):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-      full_name = st.text_input("Full Name *")
-    with c2:
-      department = st.selectbox("Department *", dept_list)
-    with c3:
-      designation = st.text_input("Designation * (e.g., Finance Manager)")
-
-    st.markdown(
-        '<div class="section-title" style="margin-top: 15px !important;">Section'
-        " 4: Attendance & Verification</div>",
-        unsafe_allow_html=True,
-    )
-    present = st.radio(
-        "Were you present throughout the tender opening session? *",
-        ["Yes", "No"],
-    )
-
-    st.markdown("*Electronic Declaration :")
-    d1 = st.checkbox("I was present during the tender opening session")
-    d2 = st.checkbox(
-        "I witnessed the opening of the online tender after the official"
-        " closing date and time"
-    )
-    d3 = st.checkbox(
-        "I verified the tenderers and amounts listed in Section 2 against the"
-        " online tender system"
-    )
-    d4 = st.checkbox(
-        "I confirm that the information recorded during the tender opening is"
-        " true and complete to the best of my knowledge"
-    )
-
-    remarks = st.text_area(
-        "Remarks (Optional)",
-        placeholder=(
-            "Enter any observation or exceptions noted during the tender"
-            " opening."
-        ),
-    )
-
-    st.markdown(
-        '<div class="section-title" style="margin-top: 15px !important;">Section'
-        " 5: Electronic Acknowledgement</div>",
-        unsafe_allow_html=True,
-    )
-    st.info(
-        "By entering my full name below and submitting this form, I"
-        " acknowledge that this submission, together with my company email"
-        " address and the system-generated timestamp, constitutes my official"
-        " attendance and verification record for this tender opening."
-    )
-    sig_name = st.text_input("Electronic Signature (Full Name) *")
-
-    submitted = st.form_submit_button("Submit Verification Record")
-
-    if submitted:
-      if (
-          not full_name
-          or department == "-- Please Select Department --"
-          or not designation
-          or not sig_name
-          or not (d1 and d2 and d3 and d4)
-      ):
-        st.error(
-            "Please complete all mandatory fields, select a valid department,"
-            " and check all declaration boxes."
+    if active_tenders_df.empty:
+        st.info("No active tenders currently available.")
+    else:
+        st.markdown(
+            f"### 📌 Active Tender Opening Sessions ({len(active_tenders_df)} Concurrent Events)"
         )
-      else:
-        conn = sqlite3.connect("cis_tender.db")
-        cursor = conn.cursor()
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        declarations_str = (
-            f"Present Throughout: {present} | Checked Declarations: [1. Present"
-            f" Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified"
-            f" Amounts: {d3}, 4. Confirmed True: {d4}]"
+        st.markdown(
+            "Multiple tender events are scheduled for opening. Please select the respective tab below to review details, view submissions, and submit your attendance verification."
         )
-        cursor.execute(
-            """
-                    INSERT INTO tender_submissions (tender_no, tender_title, closing_date, opening_date, tenderer_name, amount, verified_by, department, designation, present_status, declarations, timestamp, remarks) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-            (
-                t_no,
-                t_title,
-                t_close,
-                t_open,
-                "Multiple Tenderers",
-                0.0,
-                full_name,
-                department,
-                designation,
-                present,
-                declarations_str,
-                timestamp,
-                remarks,
-            ),
-        )
-        conn.commit()
-        conn.close()
-        st.success(
-            f"Verification successfully recorded and timestamped at"
-            f" {timestamp}!"
-        )
+
+        # Create dynamic tabs for each active tender
+        tab_titles = [
+            f"📌 {row['tender_no']} - {row['tender_title']}"
+            for _, row in active_tenders_df.iterrows()
+        ]
+        tabs = st.tabs(tab_titles)
+
+        for idx, tab in enumerate(tabs):
+            tender_row = active_tenders_df.iloc[idx]
+            t_no = tender_row["tender_no"]
+            t_title = tender_row["tender_title"]
+            t_close = tender_row["closing_date"]
+            t_open = tender_row["opening_date"]
+
+            with tab:
+                st.markdown(
+                    f'<div class="section-title">Section 1: Active Tender Details ({t_no})</div>',
+                    unsafe_allow_html=True,
+                )
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.text_input("Tender No.", value=t_no, disabled=True, key=f"no_{t_no}")
+                    st.text_input("Tender Closing Date & Time", value=t_close, disabled=True, key=f"close_{t_no}")
+                with col2:
+                    st.text_input("Tender Title", value=t_title, disabled=True, key=f"title_{t_no}")
+                    st.text_input("Tender Opening Date & Time", value=t_open, disabled=True, key=f"open_{t_no}")
+
+                st.markdown(
+                    f'<div class="section-title">Section 2: Tender Submission Summary ({t_no})</div>',
+                    unsafe_allow_html=True,
+                )
+                
+                # Fetch submissions for this specific tender
+                conn = sqlite3.connect("cis_tender.db")
+                raw_t_summary = pd.read_sql_query(
+                    "SELECT tenderer_name, amount FROM tenderers_summary WHERE tender_no = ?",
+                    conn,
+                    params=(t_no,)
+                )
+                conn.close()
+
+                tenderers_df = pd.DataFrame()
+                if not raw_t_summary.empty:
+                    tenderers_df["Tenderer Name"] = raw_t_summary["tenderer_name"]
+                    tenderers_df["Tendered Amount (RM)"] = raw_t_summary["amount"].apply(format_rm)
+
+                if not tenderers_df.empty:
+                    display_df = tenderers_df.copy()
+                    display_df.insert(0, "No.", range(1, len(display_df) + 1))
+                    st.dataframe(
+                        display_df, hide_index=True, use_container_width=True
+                    )
+                else:
+                    st.info(f"No tender submissions listed yet for {t_no}.")
+
+                st.markdown(
+                    f'<div class="section-title">Section 3: Committee Member Details ({t_no})</div>',
+                    unsafe_allow_html=True,
+                )
+                with st.form(key=f"verification_form_{t_no}"):
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        full_name = st.text_input("Full Name *", key=f"name_{t_no}")
+                    with c2:
+                        department = st.selectbox("Department *", dept_list, key=f"dept_{t_no}")
+                    with c3:
+                        designation = st.text_input("Designation * (e.g., Finance Manager)", key=f"desig_{t_no}")
+
+                    st.markdown(
+                        '<div class="section-title" style="margin-top: 15px !important;">Section 4: Attendance & Verification</div>',
+                        unsafe_allow_html=True,
+                    )
+                    present = st.radio(
+                        "Were you present throughout the tender opening session? *",
+                        ["Yes", "No"],
+                        key=f"present_{t_no}"
+                    )
+
+                    st.markdown("*Electronic Declaration :")
+                    d1 = st.checkbox("I was present during the tender opening session", key=f"d1_{t_no}")
+                    d2 = st.checkbox(
+                        "I witnessed the opening of the online tender after the official closing date and time",
+                        key=f"d2_{t_no}"
+                    )
+                    d3 = st.checkbox(
+                        "I verified the tenderers and amounts listed in Section 2 against the online tender system",
+                        key=f"d3_{t_no}"
+                    )
+                    d4 = st.checkbox(
+                        "I confirm that the information recorded during the tender opening is true and complete to the best of my knowledge",
+                        key=f"d4_{t_no}"
+                    )
+
+                    remarks = st.text_area(
+                        "Remarks (Optional)",
+                        placeholder="Enter any observation or exceptions noted during the tender opening.",
+                        key=f"remarks_{t_no}"
+                    )
+
+                    st.markdown(
+                        '<div class="section-title" style="margin-top: 15px !important;">Section 5: Electronic Acknowledgement</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.info(
+                        "By entering my full name below and submitting this form, I acknowledge that this submission, together with my company email address and the system-generated timestamp, constitutes my official attendance and verification record for this tender opening."
+                    )
+                    sig_name = st.text_input("Electronic Signature (Full Name) *", key=f"sig_{t_no}")
+
+                    submitted = st.form_submit_button(f"Submit Verification Record for {t_no}")
+
+                    if submitted:
+                        if (
+                            not full_name
+                            or department == "-- Please Select Department --"
+                            or not designation
+                            or not sig_name
+                            or not (d1 and d2 and d3 and d4)
+                        ):
+                            st.error(
+                                "Please complete all mandatory fields, select a valid department, and check all declaration boxes."
+                            )
+                        else:
+                            conn = sqlite3.connect("cis_tender.db")
+                            cursor = conn.cursor()
+                            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            declarations_str = (
+                                f"Present Throughout: {present} | Checked Declarations: [1. Present Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified Amounts: {d3}, 4. Confirmed True: {d4}]"
+                            )
+                            cursor.execute(
+                                """
+                                    INSERT INTO tender_submissions (tender_no, tender_title, closing_date, opening_date, tenderer_name, amount, verified_by, department, designation, present_status, declarations, timestamp, remarks) 
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    t_no,
+                                    t_title,
+                                    t_close,
+                                    t_open,
+                                    "Multiple Tenderers",
+                                    0.0,
+                                    full_name,
+                                    department,
+                                    designation,
+                                    present,
+                                    declarations_str,
+                                    timestamp,
+                                    remarks,
+                                ),
+                            )
+                            conn.commit()
+                            conn.close()
+                            st.success(
+                                f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
+                            )
 
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":
-  st.markdown("### ⚙️ Administration Console")
-  tab1, tab2, tab3, tab4 = st.tabs([
-      "Active Tender Setup",
-      "Tender Submissions",
-      "Department Settings",
-      "User Security",
-  ])
+    st.markdown("### ⚙️️ Administration Console")
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Active Tenders Setup",
+        "Tender Submissions Summary",
+        "Department Settings",
+        "User Security",
+    ])
 
-  with tab1:
-    st.markdown("#### Configure Active Tender Parameters")
-    with st.form("admin_tender_form"):
-      new_t_no = st.text_input("Tender No.", value=t_no)
-      new_t_title = st.text_input("Tender Title", value=t_title)
-      new_t_close = st.text_input("Tender Closing Date & Time", value=t_close)
-      new_t_open = st.text_input("Tender Opening Date & Time", value=t_open)
-      update_tender = st.form_submit_button("Update Active Tender Settings")
+    with tab1:
+        st.markdown("#### Configure Active Tender Events")
+        
+        # Display existing active tenders
+        if not active_tenders_df.empty:
+            st.dataframe(active_tenders_df, use_container_width=True, hide_index=True)
 
-      if update_tender:
+        with st.form("add_new_active_tender_form"):
+            st.markdown("**Add New Concurrent Tender Event**")
+            new_t_no = st.text_input("Tender No. (e.g., T2027/003)")
+            new_t_title = st.text_input("Tender Title")
+            new_t_close = st.text_input("Tender Closing Date & Time", value="9 October 2026, 10:00 AM")
+            new_t_open = st.text_input("Tender Opening Date & Time", value="9 October 2026, 10:30 AM")
+            add_tender_btn = st.form_submit_button("Add Active Tender")
+
+            if add_tender_btn and new_t_no and new_t_title:
+                try:
+                    conn = sqlite3.connect("cis_tender.db")
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
+                        (new_t_no.strip(), new_t_title.strip(), new_t_close, new_t_open),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Tender {new_t_no} added successfully!")
+                    st.rerun()
+                except sqlite3.IntegrityError:
+                    st.error("Error: Tender No. already exists.")
+
+        with st.form("remove_active_tender_form"):
+            st.markdown("**Remove Active Tender Event**")
+            tender_to_remove = st.selectbox(
+                "Select Tender No. to Remove", active_tenders_df["tender_no"].tolist() if not active_tenders_df.empty else []
+            )
+            remove_tender_btn = st.form_submit_button("Delete Tender Event")
+
+            if remove_tender_btn and tender_to_remove:
+                conn = sqlite3.connect("cis_tender.db")
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM active_tender WHERE tender_no = ?", (tender_to_remove,))
+                cursor.execute("DELETE FROM tenderers_summary WHERE tender_no = ?", (tender_to_remove,))
+                conn.commit()
+                conn.close()
+                st.success(f"Tender {tender_to_remove} removed successfully!")
+                st.rerun()
+
+    with tab2:
+        st.markdown("#### Manage Vendor Summary Entries by Tender")
         conn = sqlite3.connect("cis_tender.db")
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM active_tender")
-        cursor.execute(
-            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
-            (new_t_no, new_t_title, new_t_close, new_t_open),
-        )
-        conn.commit()
+        all_summary_df = pd.read_sql_query("SELECT * FROM tenderers_summary", conn)
         conn.close()
-        st.success("Active tender settings updated successfully!")
-        st.rerun()
 
-  with tab2:
-    st.markdown("#### Manage Tender Summary Entry List")
-    if not tenderers_df.empty:
-      admin_display_df = tenderers_df.copy()
-      admin_display_df.insert(0, "No.", range(1, len(admin_display_df) + 1))
-      st.dataframe(admin_display_df, hide_index=True, use_container_width=True)
-    else:
-      st.info("No tenderers listed.")
+        if not all_summary_df.empty:
+            st.dataframe(all_summary_df, hide_index=True, use_container_width=True)
+        else:
+            st.info("No vendor entries listed.")
 
-    with st.form("add_tenderer_form"):
-      st.markdown("**Add Vendor Entry**")
-      new_tenderer_name = st.text_input("Tenderer Company Name")
-      new_amount = st.text_input("Tendered Amount (RM)")
-      add_btn = st.form_submit_button("Add Vendor to Summary")
+        with st.form("add_vendor_entry_form"):
+            st.markdown("**Add Vendor Entry to Specific Tender**")
+            target_tender = st.selectbox(
+                "Select Tender No.", active_tenders_df["tender_no"].tolist() if not active_tenders_df.empty else []
+            )
+            vendor_name = st.text_input("Tenderer Company Name")
+            vendor_amount = st.text_input("Tendered Amount (RM)")
+            add_vendor_btn = st.form_submit_button("Add Vendor Entry")
 
-      if add_btn and new_tenderer_name and new_amount:
+            if add_vendor_btn and target_tender and vendor_name and vendor_amount:
+                conn = sqlite3.connect("cis_tender.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
+                    (target_tender, vendor_name, vendor_amount),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"Added vendor '{vendor_name}' to tender {target_tender}!")
+                st.rerun()
+
+    with tab3:
+        st.markdown("#### Department Master List Settings")
+        if not dept_df.empty:
+            dept_display_df = dept_df.copy()
+            dept_display_df.columns = ["Department Name"]
+            dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
+            st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
+
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            with st.form("add_dept_form"):
+                st.markdown("**Add Department**")
+                new_dept = st.text_input("New Department Name")
+                add_dept_btn = st.form_submit_button("Save Department")
+
+                if add_dept_btn and new_dept:
+                    try:
+                        conn = sqlite3.connect("cis_tender.db")
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT INTO departments (department_name) VALUES (?)",
+                            (new_dept.strip(),),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Department '{new_dept.strip()}' added successfully!")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Error: Department already exists.")
+
+        with col_d2:
+            with st.form("remove_dept_form"):
+                st.markdown("**Remove Department**")
+                dept_to_remove = st.selectbox(
+                    "Select Target Department", dept_df["department_name"].tolist()
+                )
+                remove_dept_btn = st.form_submit_button("Delete Department")
+
+                if remove_dept_btn and dept_to_remove:
+                    conn = sqlite3.connect("cis_tender.db")
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "DELETE FROM departments WHERE department_name = ?",
+                        (dept_to_remove,),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Department '{dept_to_remove}' removed successfully!")
+                    st.rerun()
+
+    with tab4:
+        st.markdown("#### System Users & Credential Management")
         conn = sqlite3.connect("cis_tender.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO tenderers_summary (tenderer_name, amount) VALUES (?,"
-            " ?)",
-            (new_tenderer_name, new_amount),
-        )
-        conn.commit()
+        users_df = pd.read_sql_query("SELECT username, role FROM users", conn)
         conn.close()
-        st.success(f"Added vendor '{new_tenderer_name}' successfully!")
-        st.rerun()
 
-    if st.button("Clear Complete Vendor Summary List", type="secondary"):
-      conn = sqlite3.connect("cis_tender.db")
-      cursor = conn.cursor()
-      cursor.execute("DELETE FROM tenderers_summary")
-      conn.commit()
-      conn.close()
-      st.warning("All vendor records wiped out.")
-      st.rerun()
-
-  with tab3:
-    st.markdown("#### Department Master List Settings")
-    if not dept_df.empty:
-      dept_display_df = dept_df.copy()
-      dept_display_df.columns = ["Department Name"]
-      dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
-      st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
-
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-      with st.form("add_dept_form"):
-        st.markdown("**Add Department**")
-        new_dept = st.text_input("New Department Name")
-        add_dept_btn = st.form_submit_button("Save Department")
-
-        if add_dept_btn and new_dept:
-          try:
-            conn = sqlite3.connect("cis_tender.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO departments (department_name) VALUES (?)",
-                (new_dept.strip(),),
+        if not users_df.empty:
+            users_display_df = users_df.copy()
+            users_display_df.columns = ["Username", "Assigned Role"]
+            users_display_df.insert(
+                0, "Item No.", range(1, len(users_display_df) + 1)
             )
-            conn.commit()
-            conn.close()
-            st.success(f"Department '{new_dept.strip()}' added successfully!")
-            st.rerun()
-          except sqlite3.IntegrityError:
-            st.error("Error: Department already exists.")
+            st.dataframe(users_display_df, use_container_width=True, hide_index=True)
 
-    with col_d2:
-      with st.form("remove_dept_form"):
-        st.markdown("**Remove Department**")
-        dept_to_remove = st.selectbox(
-            "Select Target Department", dept_df["department_name"].tolist()
-        )
-        remove_dept_btn = st.form_submit_button("Delete Department")
+            with st.form("edit_user_form"):
+                st.markdown("**Reset User Password**")
+                selected_user = st.selectbox(
+                    "Select Account Username", users_df["username"].tolist()
+                )
+                new_password = st.text_input("New Secure Password", type="password")
+                update_pass_btn = st.form_submit_button("Update Password Credentials")
 
-        if remove_dept_btn and dept_to_remove:
-          conn = sqlite3.connect("cis_tender.db")
-          cursor = conn.cursor()
-          cursor.execute(
-              "DELETE FROM departments WHERE department_name = ?",
-              (dept_to_remove,),
-          )
-          conn.commit()
-          conn.close()
-          st.success(f"Department '{dept_to_remove}' removed successfully!")
-          st.rerun()
-
-  with tab4:
-    st.markdown("#### System Users & Credential Management")
-    conn = sqlite3.connect("cis_tender.db")
-    users_df = pd.read_sql_query("SELECT username, role FROM users", conn)
-    conn.close()
-
-    if not users_df.empty:
-      users_display_df = users_df.copy()
-      users_display_df.columns = ["Username", "Assigned Role"]
-      users_display_df.insert(
-          0, "Item No.", range(1, len(users_display_df) + 1)
-      )
-      st.dataframe(users_display_df, use_container_width=True, hide_index=True)
-
-      with st.form("edit_user_form"):
-        st.markdown("**Reset User Password**")
-        selected_user = st.selectbox(
-            "Select Account Username", users_df["username"].tolist()
-        )
-        new_password = st.text_input("New Secure Password", type="password")
-        update_pass_btn = st.form_submit_button("Update Password Credentials")
-
-        if update_pass_btn:
-          if new_password:
-            hashed_pw = make_hash(new_password)
-            conn = sqlite3.connect("cis_tender.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE users SET password = ? WHERE username = ?",
-                (hashed_pw, selected_user),
-            )
-            conn.commit()
-            conn.close()
-            st.success(
-                f"Password profile updated for username '{selected_user}'!"
-            )
-            st.rerun()
-          else:
-            st.error("Please enter a valid new password string.")
+                if update_pass_btn:
+                    if new_password:
+                        hashed_pw = make_hash(new_password)
+                        conn = sqlite3.connect("cis_tender.db")
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "UPDATE users SET password = ? WHERE username = ?",
+                            (hashed_pw, selected_user),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(
+                            f"Password profile updated for username '{selected_user}'!"
+                        )
+                        st.rerun()
+                    else:
+                        st.error("Please enter a valid new password string.")
 
 # --- VIEW: AUDITOR DASHBOARD ---
 elif role == "Auditor":
-  st.markdown("### 📊 Internal Audit & Verification Trail Portal")
+    st.markdown("### 📊 Internal Audit & Verification Trail Portal")
 
-  conn = sqlite3.connect("cis_tender.db")
-  raw_audit_df = pd.read_sql_query("SELECT * FROM tender_submissions", conn)
-  conn.close()
+    conn = sqlite3.connect("cis_tender.db")
+    raw_audit_df = pd.read_sql_query("SELECT * FROM tender_submissions", conn)
+    conn.close()
 
-  if not raw_audit_df.empty:
-    logo_html = ""
-    if logo_data_uri:
-      logo_html = f'<img src="{logo_data_uri}" style="max-height: 55px; max-width: 140px; object-fit: contain; display: inline-block; vertical-align: middle;" alt="CIS Logo">'
+    if not raw_audit_df.empty:
+        logo_html = ""
+        if logo_data_uri:
+            logo_html = f'<img src="{logo_data_uri}" style="max-height: 55px; max-width: 140px; object-fit: contain; display: inline-block; vertical-align: middle;" alt="CIS Logo">'
 
-    html_rows = ""
-    for idx, row in raw_audit_df.iterrows():
-      p_status = (
-          row["present_status"]
-          if "present_status" in raw_audit_df.columns
-          and pd.notna(row["present_status"])
-          else "Yes"
-      )
-      decls = (
-          row["declarations"]
-          if "declarations" in raw_audit_df.columns
-          and pd.notna(row["declarations"])
-          else "All declarations confirmed"
-      )
+        html_rows = ""
+        for idx, row in raw_audit_df.iterrows():
+            p_status = (
+                row["present_status"]
+                if "present_status" in raw_audit_df.columns
+                and pd.notna(row["present_status"])
+                else "Yes"
+            )
+            decls = (
+                row["declarations"]
+                if "declarations" in raw_audit_df.columns
+                and pd.notna(row["declarations"])
+                else "All declarations confirmed"
+            )
 
-      html_rows += f"""
-            <tr>
-                <td>{idx + 1}</td>
-                <td>{row['tender_no']} - {row['tender_title']}</td>
-                <td>{row['verified_by']}<br><small>{row['department']} / {row['designation']}</small></td>
-                <td><b>Present:</b> {p_status}<br><small>{decls}</small></td>
-                <td>{row['timestamp']}</td>
-                <td>{row['remarks'] if pd.notna(row['remarks']) and row['remarks'] else '-'}</td>
-            </tr>
-            """
+            html_rows += f"""
+                <tr>
+                    <td>{idx + 1}</td>
+                    <td><b>{row['tender_no']}</b><br>{row['tender_title']}</td>
+                    <td>{row['verified_by']}<br><small>{row['department']} / {row['designation']}</small></td>
+                    <td><b>Present:</b> {p_status}<br><small>{decls}</small></td>
+                    <td>{row['timestamp']}</td>
+                    <td>{row['remarks'] if pd.notna(row['remarks']) and row['remarks'] else '-'}</td>
+                </tr>
+                """
 
-    current_gen_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_gen_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    print_html = f"""
+        print_html = f"""
         <html>
         <head>
             <title>CIS Tender Audit Verification Report</title>
@@ -701,84 +750,84 @@ elif role == "Auditor":
         </html>
         """
 
-    components.html(print_html, height=52)
+        components.html(print_html, height=52)
 
-    audit_df = pd.DataFrame()
-    audit_df["ID"] = raw_audit_df["id"]
-    audit_df["Tender No."] = raw_audit_df["tender_no"]
-    audit_df["Tender Title"] = raw_audit_df["tender_title"]
-    audit_df["Verified By"] = raw_audit_df["verified_by"]
-    audit_df["Department"] = raw_audit_df["department"]
-    audit_df["Designation"] = raw_audit_df["designation"]
-    audit_df["Present"] = (
-        raw_audit_df["present_status"]
-        if "present_status" in raw_audit_df.columns
-        else "Yes"
-    )
-    audit_df["Declarations Checked"] = (
-        raw_audit_df["declarations"]
-        if "declarations" in raw_audit_df.columns
-        else "-"
-    )
-    audit_df["Timestamp"] = raw_audit_df["timestamp"]
-    audit_df["Remarks"] = raw_audit_df["remarks"]
-
-    st.dataframe(audit_df, use_container_width=True, hide_index=True)
-
-    st.markdown("### Audit Trail Record Management")
-    col_del1, col_del2 = st.columns(2)
-
-    with col_del1:
-      with st.form("delete_audit_form"):
-        st.markdown("**Remove Specific Record**")
-        record_options = {
-            f"ID {row['id']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
-                "id"
-            ]
-            for _, row in raw_audit_df.iterrows()
-        }
-        selected_label = st.selectbox(
-            "Select Entry", list(record_options.keys())
+        audit_df = pd.DataFrame()
+        audit_df["ID"] = raw_audit_df["id"]
+        audit_df["Tender No."] = raw_audit_df["tender_no"]
+        audit_df["Tender Title"] = raw_audit_df["tender_title"]
+        audit_df["Verified By"] = raw_audit_df["verified_by"]
+        audit_df["Department"] = raw_audit_df["department"]
+        audit_df["Designation"] = raw_audit_df["designation"]
+        audit_df["Present"] = (
+            raw_audit_df["present_status"]
+            if "present_status" in raw_audit_df.columns
+            else "Yes"
         )
-        delete_record_btn = st.form_submit_button(
-            "🗑️ Remove Selected Record"
+        audit_df["Declarations Checked"] = (
+            raw_audit_df["declarations"]
+            if "declarations" in raw_audit_df.columns
+            else "-"
         )
+        audit_df["Timestamp"] = raw_audit_df["timestamp"]
+        audit_df["Remarks"] = raw_audit_df["remarks"]
 
-        if delete_record_btn and selected_label:
-          target_id = record_options[selected_label]
-          conn = sqlite3.connect("cis_tender.db")
-          cursor = conn.cursor()
-          cursor.execute(
-              "DELETE FROM tender_submissions WHERE id = ?", (target_id,)
-          )
-          conn.commit()
-          conn.close()
-          st.success(f"Removed audit record (ID: {target_id}).")
-          st.rerun()
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
 
-    with col_del2:
-      with st.form("clear_all_audit_form"):
-        st.markdown("**Clear Entire Audit Trail**")
-        st.write(
-            "⚠️ This action will delete all logged verification records."
-        )
-        confirm_clear = st.checkbox(
-            "I confirm that I want to delete all audit records"
-        )
-        clear_all_btn = st.form_submit_button("⚠️ Clear All Audit Records")
+        st.markdown("### Audit Trail Record Management")
+        col_del1, col_del2 = st.columns(2)
 
-        if clear_all_btn:
-          if confirm_clear:
-            conn = sqlite3.connect("cis_tender.db")
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM tender_submissions")
-            conn.commit()
-            conn.close()
-            st.warning("All audit verification records have been cleared.")
-            st.rerun()
-          else:
-            st.error(
-                "Please check the confirmation box before clearing all records."
-            )
-  else:
-    st.info("No audit verification entries logged yet.")
+        with col_del1:
+            with st.form("delete_audit_form"):
+                st.markdown("**Remove Specific Record**")
+                record_options = {
+                    f"ID {row['id']} | Tender: {row['tender_no']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
+                        "id"
+                    ]
+                    for _, row in raw_audit_df.iterrows()
+                }
+                selected_label = st.selectbox(
+                    "Select Entry", list(record_options.keys()) if record_options else ["No records available"]
+                )
+                delete_record_btn = st.form_submit_button(
+                    "🗑️ Remove Selected Record"
+                )
+
+                if delete_record_btn and selected_label and selected_label != "No records available":
+                    target_id = record_options[selected_label]
+                    conn = sqlite3.connect("cis_tender.db")
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "DELETE FROM tender_submissions WHERE id = ?", (target_id,)
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Removed audit record (ID: {target_id}).")
+                    st.rerun()
+
+        with col_del2:
+            with st.form("clear_all_audit_form"):
+                st.markdown("**Clear Entire Audit Trail**")
+                st.write(
+                    "⚠️ This action will delete all logged verification records."
+                )
+                confirm_clear = st.checkbox(
+                    "I confirm that I want to delete all audit records"
+                )
+                clear_all_btn = st.form_submit_button("⚠️ Clear All Audit Records")
+
+                if clear_all_btn:
+                    if confirm_clear:
+                        conn = sqlite3.connect("cis_tender.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM tender_submissions")
+                        conn.commit()
+                        conn.close()
+                        st.warning("All audit verification records have been cleared.")
+                        st.rerun()
+                    else:
+                        st.error(
+                            "Please check the confirmation box before clearing all records."
+                        )
+    else:
+        st.info("No audit verification entries logged yet.")

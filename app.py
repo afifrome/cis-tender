@@ -138,6 +138,8 @@ def init_db():
             ("T2027/001", "ABC Sdn. Bhd.", "1245600.00"),
             ("T2027/001", "XYZ Trading Sdn. Bhd.", "1287500.00"),
             ("T2027/001", "Maju Engineering Sdn. Bhd.", "1318900.00"),
+            ("T2027/001", "PQR Resources Sdn. Bhd.", "1356400.00"),
+            ("T2027/002", "Bataras", "10000000"),
             ("T2027/002", "Borneo Logistics Sdn Bhd", "45000.00"),
             ("T2027/002", "Sabah Haulage Express", "42500.00"),
         ]
@@ -145,6 +147,9 @@ def init_db():
             "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
             default_tenderers,
         )
+    else:
+        cursor.execute("UPDATE tenderers_summary SET tender_no = 'T2027/001' WHERE tender_no IS NULL OR tender_no = 'None'")
+        conn.commit()
 
     cursor.execute("SELECT COUNT(*) FROM departments")
     if cursor.fetchone()[0] == 0:
@@ -305,7 +310,6 @@ if role == "Committee Member":
             "Multiple tender events are scheduled for opening. Please select the respective tab below to review details, view submissions, and submit your attendance verification."
         )
 
-        # Create dynamic tabs for each active tender
         tab_titles = [
             f"📌 {row['tender_no']} - {row['tender_title']}"
             for _, row in active_tenders_df.iterrows()
@@ -337,7 +341,6 @@ if role == "Committee Member":
                     unsafe_allow_html=True,
                 )
                 
-                # Fetch submissions for this specific tender
                 conn = sqlite3.connect("cis_tender.db")
                 raw_t_summary = pd.read_sql_query(
                     "SELECT tenderer_name, amount FROM tenderers_summary WHERE tender_no = ?",
@@ -462,7 +465,7 @@ if role == "Committee Member":
 
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":
-    st.markdown("### ⚙️️ Administration Console")
+    st.markdown("### ⚙ Administration Console")
     tab1, tab2, tab3, tab4 = st.tabs([
         "Active Tenders Setup",
         "Tender Submissions Summary",
@@ -473,49 +476,52 @@ elif role == "Admin":
     with tab1:
         st.markdown("#### Configure Active Tender Events")
         
-        # Display existing active tenders
         if not active_tenders_df.empty:
             st.dataframe(active_tenders_df, use_container_width=True, hide_index=True)
 
-        with st.form("add_new_active_tender_form"):
-            st.markdown("**Add New Concurrent Tender Event**")
-            new_t_no = st.text_input("Tender No. (e.g., T2027/003)")
-            new_t_title = st.text_input("Tender Title")
-            new_t_close = st.text_input("Tender Closing Date & Time", value="9 October 2026, 10:00 AM")
-            new_t_open = st.text_input("Tender Opening Date & Time", value="9 October 2026, 10:30 AM")
-            add_tender_btn = st.form_submit_button("Add Active Tender")
+        col_a1, col_a2 = st.columns(2)
 
-            if add_tender_btn and new_t_no and new_t_title:
-                try:
+        with col_a1:
+            with st.form("add_new_active_tender_form"):
+                st.markdown("**Add New Concurrent Tender Event**")
+                new_t_no = st.text_input("Tender No. (e.g., T2027/003)")
+                new_t_title = st.text_input("Tender Title")
+                new_t_close = st.text_input("Tender Closing Date & Time", value="9 October 2026, 10:00 AM")
+                new_t_open = st.text_input("Tender Opening Date & Time", value="9 October 2026, 10:30 AM")
+                add_tender_btn = st.form_submit_button("Add Active Tender")
+
+                if add_tender_btn and new_t_no and new_t_title:
+                    try:
+                        conn = sqlite3.connect("cis_tender.db")
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
+                            (new_t_no.strip(), new_t_title.strip(), new_t_close, new_t_open),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Tender {new_t_no} added successfully!")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Error: Tender No. already exists.")
+
+        with col_a2:
+            with st.form("remove_active_tender_form"):
+                st.markdown("**Remove Active Tender Event**")
+                tender_to_remove = st.selectbox(
+                    "Select Tender No. to Remove", active_tenders_df["tender_no"].tolist() if not active_tenders_df.empty else []
+                )
+                remove_tender_btn = st.form_submit_button("Delete Tender Event")
+
+                if remove_tender_btn and tender_to_remove:
                     conn = sqlite3.connect("cis_tender.db")
                     cursor = conn.cursor()
-                    cursor.execute(
-                        "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
-                        (new_t_no.strip(), new_t_title.strip(), new_t_close, new_t_open),
-                    )
+                    cursor.execute("DELETE FROM active_tender WHERE tender_no = ?", (tender_to_remove,))
+                    cursor.execute("DELETE FROM tenderers_summary WHERE tender_no = ?", (tender_to_remove,))
                     conn.commit()
                     conn.close()
-                    st.success(f"Tender {new_t_no} added successfully!")
+                    st.success(f"Tender {tender_to_remove} removed successfully!")
                     st.rerun()
-                except sqlite3.IntegrityError:
-                    st.error("Error: Tender No. already exists.")
-
-        with st.form("remove_active_tender_form"):
-            st.markdown("**Remove Active Tender Event**")
-            tender_to_remove = st.selectbox(
-                "Select Tender No. to Remove", active_tenders_df["tender_no"].tolist() if not active_tenders_df.empty else []
-            )
-            remove_tender_btn = st.form_submit_button("Delete Tender Event")
-
-            if remove_tender_btn and tender_to_remove:
-                conn = sqlite3.connect("cis_tender.db")
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM active_tender WHERE tender_no = ?", (tender_to_remove,))
-                cursor.execute("DELETE FROM tenderers_summary WHERE tender_no = ?", (tender_to_remove,))
-                conn.commit()
-                conn.close()
-                st.success(f"Tender {tender_to_remove} removed successfully!")
-                st.rerun()
 
     with tab2:
         st.markdown("#### Manage Vendor Summary Entries by Tender")
@@ -528,26 +534,52 @@ elif role == "Admin":
         else:
             st.info("No vendor entries listed.")
 
-        with st.form("add_vendor_entry_form"):
-            st.markdown("**Add Vendor Entry to Specific Tender**")
-            target_tender = st.selectbox(
-                "Select Tender No.", active_tenders_df["tender_no"].tolist() if not active_tenders_df.empty else []
-            )
-            vendor_name = st.text_input("Tenderer Company Name")
-            vendor_amount = st.text_input("Tendered Amount (RM)")
-            add_vendor_btn = st.form_submit_button("Add Vendor Entry")
+        col_v1, col_v2 = st.columns(2)
 
-            if add_vendor_btn and target_tender and vendor_name and vendor_amount:
-                conn = sqlite3.connect("cis_tender.db")
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
-                    (target_tender, vendor_name, vendor_amount),
+        with col_v1:
+            with st.form("add_vendor_entry_form"):
+                st.markdown("**Add Vendor Entry**")
+                target_tender = st.selectbox(
+                    "Select Tender No.", active_tenders_df["tender_no"].tolist() if not active_tenders_df.empty else []
                 )
-                conn.commit()
-                conn.close()
-                st.success(f"Added vendor '{vendor_name}' to tender {target_tender}!")
-                st.rerun()
+                vendor_name = st.text_input("Tenderer Company Name")
+                vendor_amount = st.text_input("Tendered Amount (RM)")
+                add_vendor_btn = st.form_submit_button("Add Vendor Entry")
+
+                if add_vendor_btn and target_tender and vendor_name and vendor_amount:
+                    conn = sqlite3.connect("cis_tender.db")
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
+                        (target_tender, vendor_name, vendor_amount),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Added vendor '{vendor_name}' to tender {target_tender}!")
+                    st.rerun()
+
+        with col_v2:
+            with st.form("delete_vendor_entry_form"):
+                st.markdown("**Remove Specific Vendor Entry**")
+                vendor_options = {
+                    f"ID: {row['id']} | Tender: {row['tender_no']} | Company: {row['tenderer_name']} (RM {row['amount']})": row['id']
+                    for _, row in all_summary_df.iterrows()
+                } if not all_summary_df.empty else {}
+                
+                selected_vendor_label = st.selectbox(
+                    "Select Company Entry to Delete", list(vendor_options.keys()) if vendor_options else ["No entries available"]
+                )
+                delete_vendor_btn = st.form_submit_button("🗑️ Delete Company Entry")
+
+                if delete_vendor_btn and selected_vendor_label and selected_vendor_label != "No entries available":
+                    target_id = vendor_options[selected_vendor_label]
+                    conn = sqlite3.connect("cis_tender.db")
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM tenderers_summary WHERE id = ?", (target_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("Selected vendor company entry removed successfully!")
+                    st.rerun()
 
     with tab3:
         st.markdown("#### Department Master List Settings")
@@ -583,7 +615,7 @@ elif role == "Admin":
             with st.form("remove_dept_form"):
                 st.markdown("**Remove Department**")
                 dept_to_remove = st.selectbox(
-                    "Select Target Department", dept_df["department_name"].tolist()
+                    "Select Target Department", dept_df["department_name"].tolist() if not dept_df.empty else []
                 )
                 remove_dept_btn = st.form_submit_button("Delete Department")
 

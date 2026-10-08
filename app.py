@@ -466,11 +466,12 @@ if role == "Committee Member":
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":
     st.markdown("### ⚙ Administration Console")
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Active Tenders Setup",
         "Tender Submissions Summary",
         "Department Settings",
         "User Security",
+        "Database Backup & Restore",
     ])
 
     with tab1:
@@ -670,6 +671,39 @@ elif role == "Admin":
                         st.rerun()
                     else:
                         st.error("Please enter a valid new password string.")
+
+    # --- NEW TAB 5: DATABASE BACKUP & RESTORE ---
+    with tab5:
+        st.markdown("#### Database Backup & Disaster Recovery")
+        st.info(
+            "Download regular backups of your SQLite database file to safeguard against any environment resets on Streamlit Community Cloud."
+        )
+
+        col_b1, col_b2 = st.columns(2)
+
+        with col_b1:
+            st.markdown("**1. Download Database Backup**")
+            if os.path.exists("cis_tender.db"):
+                with open("cis_tender.db", "rb") as f:
+                    st.download_button(
+                        label="📥 Download Database (.db)",
+                        data=f,
+                        file_name="cis_tender_backup.db",
+                        mime="application/octet-stream",
+                    )
+                st.caption("Saves a secure copy of all tenders, users, and submissions to your device.")
+            else:
+                st.warning("Database file not found.")
+
+        with col_b2:
+            st.markdown("**2. Restore / Upload Database**")
+            uploaded_backup = st.file_uploader("Upload a valid .db backup file to restore", type=["db"])
+            if uploaded_backup is not None:
+                if st.button("⚠️ Confirm & Overwrite Database"):
+                    with open("cis_tender.db", "wb") as f:
+                        f.write(uploaded_backup.getbuffer())
+                    st.success("Database restored successfully! Reloading...")
+                    st.rerun()
 
 # --- VIEW: AUDITOR DASHBOARD ---
 elif role == "Auditor":

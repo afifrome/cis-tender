@@ -607,6 +607,7 @@ elif role == "Admin":
                 add_vendor_btn = st.form_submit_button("Add Vendor Entry")
 
                 if add_vendor_btn and target_tender and vendor_name and vendor_amount:
+                    # 1. Save Locally
                     conn = sqlite3.connect("cis_tender.db")
                     cursor = conn.cursor()
                     cursor.execute(
@@ -615,7 +616,19 @@ elif role == "Admin":
                     )
                     conn.commit()
                     conn.close()
-                    st.success(f"Added vendor '{vendor_name}' to tender {target_tender}!")
+
+                    # 2. Sync to Supabase `app1_vendor_summaries` Table
+                    if supabase:
+                        try:
+                            supabase.table("app1_vendor_summaries").insert({
+                                "tender_no": str(target_tender),
+                                "tenderer_name": str(vendor_name.strip()),
+                                "amount": str(vendor_amount.strip())
+                            }).execute()
+                        except Exception as sb_err:
+                            st.warning(f"Note: Saved locally, but Supabase sync error: {sb_err}")
+
+                    st.success(f"Added vendor '{vendor_name}' to tender {target_tender} and synced to cloud!")
                     st.rerun()
 
         with col_v2:
@@ -633,11 +646,21 @@ elif role == "Admin":
 
                 if delete_vendor_btn and selected_vendor_label and selected_vendor_label != "No entries available":
                     target_id = vendor_options[selected_vendor_label]
+                    
+                    # 1. Remove Locally
                     conn = sqlite3.connect("cis_tender.db")
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM tenderers_summary WHERE id = ?", (target_id,))
                     conn.commit()
                     conn.close()
+
+                    # 2. Remove from Supabase `app1_vendor_summaries` Table
+                    if supabase:
+                        try:
+                            supabase.table("app1_vendor_summaries").delete().eq("id", target_id).execute()
+                        except Exception as sb_err:
+                            st.warning(f"Note: Removed locally, but Supabase sync error: {sb_err}")
+
                     st.success("Selected vendor company entry removed successfully!")
                     st.rerun()
 

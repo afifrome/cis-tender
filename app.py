@@ -364,14 +364,15 @@ if role == "Committee Member":
                             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                             try:
+                                # Combine designation and remarks together so no data is lost
+                                full_remarks = f"Designation: {designation} | Remarks: {remarks}" if remarks else f"Designation: {designation}"
+                                
                                 payload = {
                                     "tender_no": str(t_no),
                                     "verified_by": str(full_name),
                                     "department": str(department),
-                                    "designation": str(designation),
-                                    "present_status": str(present),
                                     "timestamp": str(timestamp),
-                                    "remarks": str(remarks) if remarks else "No remarks"
+                                    "remarks": full_remarks
                                 }
                                 
                                 supabase.table("submissions").insert(payload).execute()
@@ -380,7 +381,6 @@ if role == "Committee Member":
                                 )
                             except Exception as e:
                                 st.error(f"Supabase Insertion Error Details: {e}")
-
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":
     st.markdown("### ⚙ Administration Console")

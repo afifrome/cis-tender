@@ -362,11 +362,8 @@ if role == "Committee Member":
                             )
                         else:
                             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            declarations_str = (
-                                f"Present Throughout: {present} | Checked Declarations: [1. Present Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified Amounts: {d3}, 4. Confirmed True: {d4}]"
-                            )
-                        try:
-                                # Keep the payload strictly minimal based on what Supabase has
+                            
+                            try:
                                 payload = {
                                     "tender_no": str(t_no),
                                     "verified_by": str(full_name),

@@ -445,14 +445,12 @@ if role == "Committee Member":
                                 "Please complete all mandatory fields, select a valid department, and check all declaration boxes."
                             )
                         else:
+                            conn = sqlite3.connect("cis_tender.db")
+                            cursor = conn.cursor()
                             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             declarations_str = (
                                 f"Present Throughout: {present} | Checked Declarations: [1. Present Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified Amounts: {d3}, 4. Confirmed True: {d4}]"
                             )
-                            
-                            # 1. Save Locally to SQLite for Admin/Auditor views
-                            conn = sqlite3.connect("cis_tender.db")
-                            cursor = conn.cursor()
                             cursor.execute(
                                 """
                                     INSERT INTO tender_submissions (tender_no, tender_title, closing_date, opening_date, tenderer_name, amount, verified_by, department, designation, present_status, declarations, timestamp, remarks) 
@@ -477,30 +475,31 @@ if role == "Committee Member":
                             conn.commit()
                             conn.close()
 
-                            # 2. Sync to Supabase Cloud Submissions Table safely
-                            supabase_success = True
+                            # Sync to Supabase `tender_submissions` table
                             if supabase:
                                 try:
-                                    full_remarks = f"Designation: {designation} | {declarations_str}"
-                                    if remarks:
-                                        full_remarks += f" | Remarks: {remarks}"
-                                        
                                     payload = {
                                         "tender_no": str(t_no),
+                                        "tender_title": str(t_title),
+                                        "closing_date": str(t_close),
+                                        "opening_date": str(t_open),
+                                        "tenderer_name": "Multiple Tenderers",
+                                        "amount": 0.0,
                                         "verified_by": str(full_name),
                                         "department": str(department),
+                                        "designation": str(designation),
+                                        "present_status": str(present),
+                                        "declarations": str(declarations_str),
                                         "timestamp": str(timestamp),
-                                        "remarks": str(full_remarks)
+                                        "remarks": str(remarks) if remarks else ""
                                     }
-                                    supabase.table("submissions").insert(payload).execute()
+                                    supabase.table("tender_submissions").insert(payload).execute()
                                 except Exception as e:
-                                    supabase_success = False
-                                    st.warning(f"Note: Saved locally, but cloud sync warning: {e}")
+                                    st.warning(f"Cloud sync warning: {e}")
 
-                            if supabase_success:
-                                st.success(
-                                    f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
-                                )
+                            st.success(
+                                f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
+                            )
 
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":
@@ -711,6 +710,7 @@ elif role == "Admin":
                     else:
                         st.error("Please enter a valid new password string.")
 
+    # --- NEW TAB 5: DATABASE BACKUP & RESTORE ---
     with tab5:
         st.markdown("#### Database Backup & Disaster Recovery")
         st.info(

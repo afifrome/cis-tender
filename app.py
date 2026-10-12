@@ -368,11 +368,6 @@ if role == "Committee Member":
                             
                             payload = {
                                 "tender_no": t_no,
-                                "tender_title": t_title,
-                                "closing_date": t_close,
-                                "opening_date": t_open,
-                                "tenderer_name": "Multiple Tenderers",
-                                "amount": 0.0,
                                 "verified_by": full_name,
                                 "department": department,
                                 "designation": designation,

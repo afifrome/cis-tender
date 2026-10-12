@@ -50,14 +50,26 @@ def get_base64_image(file_path):
         return None
 
 
-# Fetch data helpers from Supabase
+# Fetch data helpers from Supabase with safe column mappings
 def fetch_active_tenders():
     res = supabase.table("active_tenders").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
+    if not res.data:
+        return pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
+    
+    df = pd.DataFrame(res.data)
+    if "tender_number" in df.columns and "tender_no" not in df.columns:
+        df["tender_no"] = df["tender_number"]
+    if "title" in df.columns and "tender_title" not in df.columns:
+        df["tender_title"] = df["title"]
+    return df
 
 def fetch_departments():
-    # If departments table isn't in Supabase, we can use a default list or fetch distinct departments from submissions
-    return pd.DataFrame([{"department_name": "IT"}, {"department_name": "Finance"}, {"department_name": "Operations"}, {"department_name": "Procurement"}])
+    return pd.DataFrame([
+        {"department_name": "Finance"},
+        {"department_name": "Procurement"},
+        {"department_name": "IT"},
+        {"department_name": "Operations"}
+    ])
 
 def fetch_tenderers_summary(tender_no=None):
     query = supabase.table("tenderers_summary").select("*")
@@ -67,7 +79,7 @@ def fetch_tenderers_summary(tender_no=None):
     return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "tender_no", "tenderer_name", "amount"])
 
 def fetch_submissions():
-    res = supabase.table("submissions").select("*").execute() # Notice: table is "submissions"
+    res = supabase.table("submissions").select("*").execute()
     return pd.DataFrame(res.data) if res.data else pd.DataFrame()
 
 
@@ -327,7 +339,7 @@ if role == "Committee Member":
                                 "remarks": remarks
                             }
                             
-                            supabase.table("tender_submissions").insert(payload).execute()
+                            supabase.table("submissions").insert(payload).execute()
                             st.success(
                                 f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
                             )
@@ -365,7 +377,7 @@ elif role == "Admin":
                             "closing_date": new_t_close,
                             "opening_date": new_t_open
                         }
-                        supabase.table("active_tender").insert(payload).execute()
+                        supabase.table("active_tenders").insert(payload).execute()
                         st.success(f"Tender {new_t_no} added successfully!")
                         st.rerun()
                     except Exception as e:
@@ -380,7 +392,7 @@ elif role == "Admin":
                 remove_tender_btn = st.form_submit_button("Delete Tender Event")
 
                 if remove_tender_btn and tender_to_remove:
-                    supabase.table("active_tender").delete().eq("tender_no", tender_to_remove).execute()
+                    supabase.table("active_tenders").delete().eq("tender_no", tender_to_remove).execute()
                     supabase.table("tenderers_summary").delete().eq("tender_no", tender_to_remove).execute()
                     st.success(f"Tender {tender_to_remove} removed successfully!")
                     st.rerun()
@@ -440,34 +452,7 @@ elif role == "Admin":
             dept_display_df = dept_df.copy()
             dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
             st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
-
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            with st.form("add_dept_form"):
-                st.markdown("**Add Department**")
-                new_dept = st.text_input("New Department Name")
-                add_dept_btn = st.form_submit_button("Save Department")
-
-                if add_dept_btn and new_dept:
-                    try:
-                        supabase.table("departments").insert({"department_name": new_dept.strip()}).execute()
-                        st.success(f"Department '{new_dept.strip()}' added successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-        with col_d2:
-            with st.form("remove_dept_form"):
-                st.markdown("**Remove Department**")
-                dept_to_remove = st.selectbox(
-                    "Select Target Department", dept_df["department_name"].tolist() if not dept_df.empty else []
-                )
-                remove_dept_btn = st.form_submit_button("Delete Department")
-
-                if remove_dept_btn and dept_to_remove:
-                    supabase.table("departments").delete().eq("department_name", dept_to_remove).execute()
-                    st.success(f"Department '{dept_to_remove}' removed successfully!")
-                    st.rerun()
+        st.info("Departments are managed centrally.")
 
     with tab4:
         st.markdown("#### System Users & Credential Management")
@@ -627,7 +612,7 @@ elif role == "Auditor":
 
                 if delete_record_btn and selected_label and selected_label != "No records available":
                     target_id = record_options[selected_label]
-                    supabase.table("tender_submissions").delete().eq("id", target_id).execute()
+                    supabase.table("submissions").delete().eq("id", target_id).execute()
                     st.success(f"Removed audit record (ID: {target_id}).")
                     st.rerun()
 
@@ -639,8 +624,7 @@ elif role == "Auditor":
 
                 if clear_all_btn:
                     if confirm_clear:
-                        # Delete all rows by matching any valid ID greater than 0
-                        supabase.table("tender_submissions").delete().gt("id", 0).execute()
+                        supabase.table("submissions").delete().gt("id", 0).execute()
                         st.warning("All audit verification records have been cleared.")
                         st.rerun()
                     else:

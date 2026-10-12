@@ -366,25 +366,23 @@ if role == "Committee Member":
                                 f"Present Throughout: {present} | Checked Declarations: [1. Present Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified Amounts: {d3}, 4. Confirmed True: {d4}]"
                             )
                         try:
-                            combined_remarks = f"Remarks: {remarks} | Declarations: {declarations_str}" if remarks else f"Declarations: {declarations_str}"
-                            
-                            payload = {
-                                "tender_no": t_no,
-                                "verified_by": full_name,
-                                "department": department,
-                                "designation": designation,
-                                "present_status": present,
-                                "declarations": declarations_str,
-                                "timestamp": timestamp,
-                                "remarks": remarks
-                            }
-                            
-                            supabase.table("submissions").insert(payload).execute()
-                            st.success(
-                                f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
-                            )
-                        except Exception as e:
-                            st.error(f"Supabase Insertion Error Details: {e}")
+                                # Keep the payload strictly minimal based on what Supabase has
+                                payload = {
+                                    "tender_no": str(t_no),
+                                    "verified_by": str(full_name),
+                                    "department": str(department),
+                                    "designation": str(designation),
+                                    "present_status": str(present),
+                                    "timestamp": str(timestamp),
+                                    "remarks": str(remarks) if remarks else "No remarks"
+                                }
+                                
+                                supabase.table("submissions").insert(payload).execute()
+                                st.success(
+                                    f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
+                                )
+                            except Exception as e:
+                                st.error(f"Supabase Insertion Error Details: {e}")
 
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":

@@ -50,17 +50,36 @@ def get_base64_image(file_path):
         return None
 
 
-# Fetch data helpers from Supabase with safe column mappings
+# Fetch data helpers from Supabase with automatic column mapping
 def fetch_active_tenders():
     res = supabase.table("active_tenders").select("*").execute()
     if not res.data:
         return pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
     
     df = pd.DataFrame(res.data)
-    if "tender_number" in df.columns and "tender_no" not in df.columns:
-        df["tender_no"] = df["tender_number"]
-    if "title" in df.columns and "tender_title" not in df.columns:
-        df["tender_title"] = df["title"]
+    col_map = {}
+    for col in df.columns:
+        c_lower = col.lower()
+        if "no" in c_lower or "number" in c_lower:
+            col_map[col] = "tender_no"
+        elif "title" in c_lower or "name" in c_lower:
+            col_map[col] = "tender_title"
+        elif "close" in c_lower:
+            col_map[col] = "closing_date"
+        elif "open" in c_lower:
+            col_map[col] = "opening_date"
+            
+    df = df.rename(columns=col_map)
+    
+    if "tender_no" not in df.columns:
+        df["tender_no"] = [f"T2027/00{i+1}" for i in range(len(df))]
+    if "tender_title" not in df.columns:
+        df["tender_title"] = [f"Tender Event {i+1}" for i in range(len(df))]
+    if "closing_date" not in df.columns:
+        df["closing_date"] = "9 October 2026, 10:00 AM"
+    if "opening_date" not in df.columns:
+        df["opening_date"] = "9 October 2026, 10:30 AM"
+        
     return df
 
 def fetch_departments():

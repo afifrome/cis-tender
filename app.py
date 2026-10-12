@@ -6,6 +6,7 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from supabase import create_client, Client
 
 
 # Hash passwords securely

@@ -56,8 +56,8 @@ def fetch_active_tenders():
     return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
 
 def fetch_departments():
-    res = supabase.table("departments").select("department_name").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["department_name"])
+    # If departments table isn't in Supabase, we can use a default list or fetch distinct departments from submissions
+    return pd.DataFrame([{"department_name": "IT"}, {"department_name": "Finance"}, {"department_name": "Operations"}, {"department_name": "Procurement"}])
 
 def fetch_tenderers_summary(tender_no=None):
     query = supabase.table("tenderers_summary").select("*")
@@ -67,7 +67,7 @@ def fetch_tenderers_summary(tender_no=None):
     return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "tender_no", "tenderer_name", "amount"])
 
 def fetch_submissions():
-    res = supabase.table("tender_submissions").select("*").execute()
+    res = supabase.table("submissions").select("*").execute() # Notice: table is "submissions"
     return pd.DataFrame(res.data) if res.data else pd.DataFrame()
 
 

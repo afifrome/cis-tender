@@ -365,7 +365,7 @@ if role == "Committee Member":
                             declarations_str = (
                                 f"Present Throughout: {present} | Checked Declarations: [1. Present Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified Amounts: {d3}, 4. Confirmed True: {d4}]"
                             )
-                            
+                        try:
                             payload = {
                                 "tender_no": t_no,
                                 "verified_by": full_name,
@@ -381,6 +381,8 @@ if role == "Committee Member":
                             st.success(
                                 f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
                             )
+                        except Exception as e:
+                            st.error(f"Supabase Insertion Error Details: {e}")
 
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":

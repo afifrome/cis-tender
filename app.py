@@ -50,9 +50,13 @@ def get_base64_image(file_path):
         return None
 
 
-# Fetch data helpers from Supabase with automatic column mapping
+# Fetch data helpers from Supabase with automatic column mapping & error handling
 def fetch_active_tenders():
-    res = supabase.table("active_tenders").select("*").execute()
+    try:
+        res = supabase.table("active_tenders").select("*").execute()
+    except Exception:
+        return pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
+        
     if not res.data:
         return pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
     
@@ -91,15 +95,28 @@ def fetch_departments():
     ])
 
 def fetch_tenderers_summary(tender_no=None):
-    query = supabase.table("tenderers_summary").select("*")
-    if tender_no:
-        query = query.eq("tender_no", tender_no)
-    res = query.execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "tender_no", "tenderer_name", "amount"])
+    try:
+        query = supabase.table("tenderers_summary").select("*")
+        if tender_no:
+            query = query.eq("tender_no", tender_no)
+        res = query.execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "tender_no", "tenderer_name", "amount"])
+    except Exception:
+        try:
+            query = supabase.table("tenderer_summary").select("*")
+            if tender_no:
+                query = query.eq("tender_no", tender_no)
+            res = query.execute()
+            return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "tender_no", "tenderer_name", "amount"])
+        except Exception:
+            return pd.DataFrame(columns=["id", "tender_no", "tenderer_name", "amount"])
 
 def fetch_submissions():
-    res = supabase.table("submissions").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+    try:
+        res = supabase.table("submissions").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
 
 
 st.set_page_config(
@@ -177,8 +194,11 @@ if not st.session_state["logged_in"]:
         login_btn = st.form_submit_button("Authenticate")
 
         if login_btn:
-            res = supabase.table("users").select("password, role").eq("username", username).execute()
-            user_record = res.data[0] if res.data else None
+            try:
+                res = supabase.table("users").select("password, role").eq("username", username).execute()
+                user_record = res.data[0] if res.data else None
+            except Exception:
+                user_record = None
 
             if user_record and check_password(password, user_record["password"]):
                 st.session_state["logged_in"] = True
@@ -258,8 +278,12 @@ if role == "Committee Member":
                 raw_t_summary = fetch_tenderers_summary(t_no)
                 tenderers_df = pd.DataFrame()
                 if not raw_t_summary.empty:
-                    tenderers_df["Tenderer Name"] = raw_t_summary["tenderer_name"]
-                    tenderers_df["Tendered Amount (RM)"] = raw_t_summary["amount"].apply(format_rm)
+                    # Safe mapping for summary columns
+                    c_name_col = next((c for c in raw_t_summary.columns if "name" in c.lower() or "tenderer" in c.lower()), "tenderer_name")
+                    c_amt_col = next((c for c in raw_t_summary.columns if "amount" in c.lower() or "price" in c.lower()), "amount")
+                    
+                    tenderers_df["Tenderer Name"] = raw_t_summary[c_name_col]
+                    tenderers_df["Tendered Amount (RM)"] = raw_t_summary[c_amt_col].apply(format_rm)
 
                 if not tenderers_df.empty:
                     display_df = tenderers_df.copy()
@@ -450,7 +474,7 @@ elif role == "Admin":
             with st.form("delete_vendor_entry_form"):
                 st.markdown("**Remove Specific Vendor Entry**")
                 vendor_options = {
-                    f"ID: {row['id']} | Tender: {row['tender_no']} | Company: {row['tenderer_name']} (RM {row['amount']})": row['id']
+                    f"ID: {row.get('id')} | Tender: {row.get('tender_no')} | Company: {row.get('tenderer_name')} (RM {row.get('amount')})": row.get('id')
                     for _, row in all_summary_df.iterrows()
                 } if not all_summary_df.empty else {}
                 
@@ -475,8 +499,11 @@ elif role == "Admin":
 
     with tab4:
         st.markdown("#### System Users & Credential Management")
-        users_res = supabase.table("users").select("username, role").execute()
-        users_df = pd.DataFrame(users_res.data) if users_res.data else pd.DataFrame()
+        try:
+            users_res = supabase.table("users").select("username, role").execute()
+            users_df = pd.DataFrame(users_res.data) if users_res.data else pd.DataFrame()
+        except Exception:
+            users_df = pd.DataFrame()
 
         if not users_df.empty:
             users_display_df = users_df.copy()
@@ -520,11 +547,11 @@ elif role == "Auditor":
             html_rows += f"""
                 <tr>
                     <td>{idx + 1}</td>
-                    <td><b>{row['tender_no']}</b><br>{row['tender_title']}</td>
-                    <td>{row['verified_by']}<br><small>{row['department']} / {row['designation']}</small></td>
+                    <td><b>{row.get('tender_no')}</b><br>{row.get('tender_title')}</td>
+                    <td>{row.get('verified_by')}<br><small>{row.get('department')} / {row.get('designation')}</small></td>
                     <td><b>Present:</b> {p_status}<br><small>{decls}</small></td>
-                    <td>{row['timestamp']}</td>
-                    <td>{row['remarks'] if row.get('remarks') else '-'}</td>
+                    <td>{row.get('timestamp')}</td>
+                    <td>{row.get('remarks') if row.get('remarks') else '-'}</td>
                 </tr>
                 """
 
@@ -601,18 +628,18 @@ elif role == "Auditor":
         components.html(print_html, height=52)
 
         audit_df = pd.DataFrame()
-        audit_df["ID"] = raw_audit_df["id"]
-        audit_df["Tender No."] = raw_audit_df["tender_no"]
-        audit_df["Tender Title"] = raw_audit_df["tender_title"]
-        audit_df["Verified By"] = raw_audit_df["verified_by"]
-        audit_df["Department"] = raw_audit_df["department"]
-        audit_df["Designation"] = raw_audit_df["designation"]
+        audit_df["ID"] = raw_audit_df.get("id")
+        audit_df["Tender No."] = raw_audit_df.get("tender_no")
+        audit_df["Tender Title"] = raw_audit_df.get("tender_title")
+        audit_df["Verified By"] = raw_audit_df.get("verified_by")
+        audit_df["Department"] = raw_audit_df.get("department")
+        audit_df["Designation"] = raw_audit_df.get("designation")
         audit_df["Present"] = raw_audit_df.get("present_status", "Yes")
         audit_df["Declarations Checked"] = raw_audit_df.get("declarations", "-")
-        audit_df["Timestamp"] = raw_audit_df["timestamp"]
-        audit_df["Remarks"] = raw_audit_df["remarks"]
+        audit_df["Timestamp"] = raw_audit_df.get("timestamp")
+        audit_df["Remarks"] = raw_audit_df.get("remarks")
 
-        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        st.dataframe(raw_audit_df, use_container_width=True, hide_index=True)
 
         st.markdown("### Audit Trail Record Management")
         col_del1, col_del2 = st.columns(2)
@@ -621,9 +648,10 @@ elif role == "Auditor":
             with st.form("delete_audit_form"):
                 st.markdown("**Remove Specific Record**")
                 record_options = {
-                    f"ID {row['id']} | Tender: {row['tender_no']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row["id"]
+                    f"ID {row.get('id')} | Tender: {row.get('tender_no')} | {row.get('verified_by')} ({row.get('department')}) - {row.get('timestamp')}": row.get("id")
                     for _, row in raw_audit_df.iterrows()
-                }
+                } if not raw_audit_df.empty else {}
+                
                 selected_label = st.selectbox(
                     "Select Entry", list(record_options.keys()) if record_options else ["No records available"]
                 )

@@ -52,7 +52,7 @@ def get_base64_image(file_path):
 
 # Fetch data helpers from Supabase
 def fetch_active_tenders():
-    res = supabase.table("active_tender").select("*").execute()
+    res = supabase.table("active_tenders").select("*").execute()
     return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
 
 def fetch_departments():

@@ -34,13 +34,19 @@ except Exception as e:
 if not tenders:
     st.warning("No active tenders available at the moment.")
 else:
-    # Tender Selection
-    tender_options = {f"{t['tender_no']} - {t.get('tender_title', '')}": t for t in tenders}
+    # Tender Selection with safe fallback for keys
+    tender_options = {}
+    for t in tenders:
+        t_num = t.get("tender_no") or t.get("id") or t.get("tender_id") or "UNKNOWN"
+        t_ttl = t.get("tender_title") or t.get("title") or ""
+        label = f"{t_num} - {t_ttl}" if t_ttl else str(t_num)
+        tender_options[label] = t
+
     selected_tender_label = st.selectbox("Select Tender for Verification", options=list(tender_options.keys()))
     
     selected_tender = tender_options[selected_tender_label]
-    t_no = selected_tender["tender_no"]
-    t_title = selected_tender.get("tender_title", "N/A")
+    t_no = selected_tender.get("tender_no") or selected_tender.get("id") or selected_tender.get("tender_id") or "UNKNOWN"
+    t_title = selected_tender.get("tender_title") or selected_tender.get("title") or "N/A"
     
     st.markdown(f"### Tender Details: **{t_no}**")
     st.info(f"**Title:** {t_title}")

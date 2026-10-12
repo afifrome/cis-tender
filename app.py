@@ -76,7 +76,6 @@ def init_db():
         )
     """)
 
-    # Safe migration: add columns if they don't exist yet in older tables
     cursor.execute("PRAGMA table_info(tender_submissions)")
     existing_columns = [col[1] for col in cursor.fetchall()]
 
@@ -105,7 +104,6 @@ def init_db():
         )
     """)
     
-    # Migration for tenderers_summary to support multiple tenders if missing tender_no
     cursor.execute("PRAGMA table_info(tenderers_summary)")
     summary_columns = [col[1] for col in cursor.fetchall()]
     if "tender_no" not in summary_columns:
@@ -475,7 +473,7 @@ if role == "Committee Member":
                             conn.commit()
                             conn.close()
 
-                            # Sync to Supabase `tender_submissions` table
+                            # Sync Submission to Supabase `tender_submissions` table
                             if supabase:
                                 try:
                                     payload = {
@@ -531,6 +529,7 @@ elif role == "Admin":
 
                 if add_tender_btn and new_t_no and new_t_title:
                     try:
+                        # 1. Save Locally
                         conn = sqlite3.connect("cis_tender.db")
                         cursor = conn.cursor()
                         cursor.execute(
@@ -539,7 +538,20 @@ elif role == "Admin":
                         )
                         conn.commit()
                         conn.close()
-                        st.success(f"Tender {new_t_no} added successfully!")
+
+                        # 2. Sync to Supabase `app1_active_tenders` Table
+                        if supabase:
+                            try:
+                                supabase.table("app1_active_tenders").insert({
+                                    "tender_no": str(new_t_no.strip()),
+                                    "tender_title": str(new_t_title.strip()),
+                                    "closing_date": str(new_t_close),
+                                    "opening_date": str(new_t_open)
+                                }).execute()
+                            except Exception as sb_err:
+                                st.warning(f"Note: Saved locally, but Supabase sync error: {sb_err}")
+
+                        st.success(f"Tender {new_t_no} added successfully and synced to cloud!")
                         st.rerun()
                     except sqlite3.IntegrityError:
                         st.error("Error: Tender No. already exists.")
@@ -553,12 +565,21 @@ elif role == "Admin":
                 remove_tender_btn = st.form_submit_button("Delete Tender Event")
 
                 if remove_tender_btn and tender_to_remove:
+                    # 1. Remove Locally
                     conn = sqlite3.connect("cis_tender.db")
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM active_tender WHERE tender_no = ?", (tender_to_remove,))
                     cursor.execute("DELETE FROM tenderers_summary WHERE tender_no = ?", (tender_to_remove,))
                     conn.commit()
                     conn.close()
+
+                    # 2. Remove from Supabase `app1_active_tenders` Table
+                    if supabase:
+                        try:
+                            supabase.table("app1_active_tenders").delete().eq("tender_no", tender_to_remove).execute()
+                        except Exception as sb_err:
+                            st.warning(f"Note: Removed locally, but Supabase sync error: {sb_err}")
+
                     st.success(f"Tender {tender_to_remove} removed successfully!")
                     st.rerun()
 
@@ -710,7 +731,6 @@ elif role == "Admin":
                     else:
                         st.error("Please enter a valid new password string.")
 
-    # --- NEW TAB 5: DATABASE BACKUP & RESTORE ---
     with tab5:
         st.markdown("#### Database Backup & Disaster Recovery")
         st.info(

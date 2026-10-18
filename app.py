@@ -138,11 +138,10 @@ if not st.session_state["logged_in"]:
             except Exception:
                 user_record = None
 
-            # Accepts both hashed passwords and plain-text (e.g., admin123 / audit123)
             if user_record and (check_password(password, user_record["password"]) or password == user_record["password"]):
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = username
-                st.session_state["role"] = user_record["role"]
+                st.session_state["role"] = str(user_record["role"]).strip().capitalize()
                 st.success(f"Welcome, {username}!")
                 st.rerun()
             else:
@@ -161,6 +160,9 @@ else:
         st.session_state["user"] = None
         st.session_state["role"] = "Committee Member"
         st.rerun()
+
+# Normalize role for bulletproof routing
+current_role = str(role).strip().capitalize()
 
 # --- FETCH DATA DIRECTLY FROM SUPABASE ---
 try:
@@ -181,8 +183,8 @@ dept_list = (
     else ["-- Please Select Department --"]
 )
 
-# --- VIEW: COMMITTEE MEMBER (PUBLIC FORM WITH TABS FOR CONCURRENT EVENTS) ---
-if role == "Committee Member":
+# --- VIEW: COMMITTEE MEMBER ---
+if current_role == "Committee Member":
     if active_tenders_df.empty:
         st.info("No active tenders currently available.")
     else:
@@ -340,7 +342,7 @@ if role == "Committee Member":
                                 st.error(f"Failed to submit to cloud database: {e}")
 
 # --- VIEW: ADMIN PANEL ---
-elif role == "Admin":
+elif current_role == "Admin":
     st.markdown("### ⚙ Administration Console")
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Active Tenders Setup",
@@ -443,6 +445,4 @@ elif role == "Admin":
                 } if not all_summary_df.empty else {}
                 
                 selected_vendor_label = st.selectbox(
-                    "Select Company Entry to Delete", list(vendor_options.keys()) if vendor_options else ["No entries available"]
-                )
-  
+                    "Select Company Entry to Delete", list(vendor_options.keys())

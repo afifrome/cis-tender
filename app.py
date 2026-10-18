@@ -131,7 +131,7 @@ if not st.session_state["logged_in"]:
         password = st.text_input("Password", type="password")
         login_btn = st.form_submit_button("Authenticate")
 
-            if login_btn:
+        if login_btn:
             try:
                 res = supabase.table("app1_users").select("*").eq("username", username).execute()
                 user_record = res.data[0] if res.data else None

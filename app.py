@@ -146,8 +146,6 @@ if not st.session_state["logged_in"]:
                 st.rerun()
             else:
                 st.error("Invalid credentials.")
-
-    role = "Committee Member"
 else:
     st.sidebar.success(
         f"Authenticated User:\n**{st.session_state['user']}**"

@@ -160,7 +160,7 @@ else:
         st.rerun()
 
 # Normalize role for bulletproof routing
-current_role = str(role).strip().capitalize()
+current_role = str(st.session_state.get("role", "Committee Member")).strip().title()
 
 # --- FETCH DATA DIRECTLY FROM SUPABASE ---
 try:

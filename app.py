@@ -445,4 +445,265 @@ elif current_role == "Admin":
                 } if not all_summary_df.empty else {}
                 
                 selected_vendor_label = st.selectbox(
-                    "Select Company Entry to Delete", list(vendor_options.keys())
+                    "Select Company Entry to Delete", list(vendor_options.keys()) if vendor_options else ["No entries available"]
+                )
+                delete_vendor_btn = st.form_submit_button("🗑️ Delete Company Entry")
+
+                if delete_vendor_btn and selected_vendor_label and selected_vendor_label != "No entries available":
+                    target_id = vendor_options[selected_vendor_label]
+                    try:
+                        supabase.table("app1_vendor_summaries").delete().eq("id", target_id).execute()
+                        st.success("Selected vendor company entry removed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting entry: {e}")
+
+    with tab3:
+        st.markdown("#### Department Master List Settings")
+        if not dept_df.empty:
+            dept_display_df = dept_df.copy()
+            dept_display_df.columns = ["Department Name"]
+            dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
+            st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
+
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            with st.form("add_dept_form"):
+                st.markdown("**Add Department**")
+                new_dept = st.text_input("New Department Name")
+                add_dept_btn = st.form_submit_button("Save Department")
+
+                if add_dept_btn and new_dept:
+                    try:
+                        supabase.table("app1_departments").insert({"department_name": new_dept.strip()}).execute()
+                        st.success(f"Department '{new_dept.strip()}' added successfully to Supabase!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error adding department (may already exist): {e}")
+
+        with col_d2:
+            with st.form("remove_dept_form"):
+                st.markdown("**Remove Department**")
+                dept_to_remove = st.selectbox(
+                    "Select Target Department", dept_df["department_name"].tolist() if not dept_df.empty else []
+                )
+                remove_dept_btn = st.form_submit_button("Delete Department")
+
+                if remove_dept_btn and dept_to_remove:
+                    try:
+                        supabase.table("app1_departments").delete().eq("department_name", dept_to_remove).execute()
+                        st.success(f"Department '{dept_to_remove}' removed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error removing department: {e}")
+
+    with tab4:
+        st.markdown("#### System Users & Credential Management")
+        try:
+            u_res = supabase.table("app1_users").select("username, role").execute()
+            users_df = pd.DataFrame(u_res.data) if u_res.data else pd.DataFrame()
+        except Exception:
+            users_df = pd.DataFrame()
+
+        if not users_df.empty:
+            users_display_df = users_df.copy()
+            users_display_df.columns = ["Username", "Assigned Role"]
+            users_display_df.insert(0, "Item No.", range(1, len(users_display_df) + 1))
+            st.dataframe(users_display_df, use_container_width=True, hide_index=True)
+
+            with st.form("edit_user_form"):
+                st.markdown("**Reset User Password**")
+                selected_user = st.selectbox("Select Account Username", users_df["username"].tolist())
+                new_password = st.text_input("New Secure Password", type="password")
+                update_pass_btn = st.form_submit_button("Update Password Credentials")
+
+                if update_pass_btn:
+                    if new_password:
+                        hashed_pw = make_hash(new_password)
+                        try:
+                            supabase.table("app1_users").update({"password": hashed_pw}).eq("username", selected_user).execute()
+                            st.success(f"Password profile updated for username '{selected_user}'!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error updating password: {e}")
+                    else:
+                        st.error("Please enter a valid new password string.")
+
+    with tab5:
+        st.markdown("#### Cloud Database Status")
+        st.success("🟢 Connected directly to Supabase Cloud Database. No local database required.")
+
+# --- VIEW: AUDITOR DASHBOARD ---
+elif current_role == "Auditor":
+    st.markdown("### 📊 Internal Audit & Verification Trail Portal")
+
+    try:
+        a_res = supabase.table("tender_submissions").select("*").execute()
+        raw_audit_df = pd.DataFrame(a_res.data) if a_res.data else pd.DataFrame()
+    except Exception:
+        raw_audit_df = pd.DataFrame()
+
+    if not raw_audit_df.empty:
+        logo_html = ""
+        if logo_data_uri:
+            logo_html = f'<img src="{logo_data_uri}" style="max-height: 55px; max-width: 140px; object-fit: contain; display: inline-block; vertical-align: middle;" alt="CIS Logo">'
+
+        html_rows = ""
+        for idx, row in raw_audit_df.iterrows():
+            p_status = row.get("present_status", "Yes")
+            decls = row.get("declarations", "All declarations confirmed")
+
+            html_rows += f"""
+                <tr>
+                    <td>{idx + 1}</td>
+                    <td><b>{row.get('tender_no')}</b><br>{row.get('tender_title')}</td>
+                    <td>{row.get('verified_by')}<br><small>{row.get('department')} / {row.get('designation')}</small></td>
+                    <td><b>Present:</b> {p_status}<br><small>{decls}</small></td>
+                    <td>{row.get('timestamp')}</td>
+                    <td>{row.get('remarks') if row.get('remarks') else '-'}</td>
+                </tr>
+                """
+
+        current_gen_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        print_html = f"""
+        <html>
+        <head>
+            <title>CIS Tender Audit Verification Report</title>
+            <style>
+                @page {{ size: landscape; margin: 10mm; }}
+                body {{ font-family: Arial, sans-serif; color: #333; margin: 0; background-color: transparent; text-align: left; }}
+                .toolbar {{ display: flex; justify-content: flex-end; margin-bottom: 10px; }}
+                .report-container {{ display: none; }}
+                @media print {{
+                    .toolbar {{ display: none; }}
+                    .report-container {{ display: block !important; }}
+                }}
+                .header-table {{ width: 100%; border-collapse: collapse; border: none; margin-bottom: 15px; border-bottom: 2px solid #1f4068; padding-bottom: 8px; }}
+                .header-table td {{ border: none; padding: 0; vertical-align: middle; }}
+                .header-title-box {{ text-align: right; }}
+                .header-title-box h2 {{ margin: 0; color: #1f4068; font-size: 16px; font-weight: bold; letter-spacing: 0.5px; }}
+                .header-title-box p {{ margin: 3px 0 0 0; font-size: 11px; color: #444; font-weight: bold; text-transform: uppercase; }}
+                .doc-ref {{ font-size: 10px; color: #555; text-align: right; margin-top: 4px; }}
+                table.data-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
+                table.data-table th, table.data-table td {{ border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }}
+                table.data-table th {{ background-color: #1f4068; color: white; }}
+                table.data-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                .footer {{ margin-top: 20px; font-size: 10px; text-align: right; color: #777; }}
+                .print-btn {{ background-color: #1f4068; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
+                .print-btn:hover {{ background-color: #163254; }}
+            </style>
+        </head>
+        <body>
+            <div class="toolbar">
+                <button class="print-btn" onclick="window.print();">🖨️ Print / Save Report as PDF (Landscape)</button>
+            </div>
+            
+            <div class="report-container">
+                <table class="header-table">
+                    <tr>
+                        <td style="width: 25%;">
+                            {logo_html}
+                        </td>
+                        <td style="width: 75%;" class="header-title-box">
+                            <h2>CEMENT INDUSTRIES (SABAH) SDN. BHD.</h2>
+                            <p>SEPANGGAR INDUSTRIAL ESTATE &bull; OFFICIAL TENDER AUDIT VERIFICATION REGISTER</p>
+                            <div class="doc-ref">Document Ref: CIS/OTC/AUD/2026/10 | Generated: {current_gen_time}</div>
+                        </td>
+                    </tr>
+                </table>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 4%;">No.</th>
+                            <th style="width: 18%;">Tender Details</th>
+                            <th style="width: 20%;">Committee Member Info</th>
+                            <th style="width: 33%;">Attendance & Declarations Chosen</th>
+                            <th style="width: 13%;">Timestamp</th>
+                            <th style="width: 12%;">Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {html_rows}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>This is a system-generated detailed compliance report from the CIS Electronic Tender Portal.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        components.html(print_html, height=52)
+
+        audit_df = pd.DataFrame()
+        audit_df["ID"] = raw_audit_df["id"]
+        audit_df["Tender No."] = raw_audit_df["tender_no"]
+        audit_df["Tender Title"] = raw_audit_df["tender_title"]
+        audit_df["Verified By"] = raw_audit_df["verified_by"]
+        audit_df["Department"] = raw_audit_df["department"]
+        audit_df["Designation"] = raw_audit_df["designation"]
+        audit_df["Present"] = raw_audit_df.get("present_status", "Yes")
+        audit_df["Declarations Checked"] = raw_audit_df.get("declarations", "-")
+        audit_df["Timestamp"] = raw_audit_df["timestamp"]
+        audit_df["Remarks"] = raw_audit_df["remarks"]
+
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+
+        st.markdown("### Audit Trail Record Management")
+        col_del1, col_del2 = st.columns(2)
+
+        with col_del1:
+            with st.form("delete_audit_form"):
+                st.markdown("**Remove Specific Record**")
+                record_options = {
+                    f"ID {row['id']} | Tender: {row['tender_no']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
+                        "id"
+                    ]
+                    for _, row in raw_audit_df.iterrows()
+                }
+                selected_label = st.selectbox(
+                    "Select Entry", list(record_options.keys()) if record_options else ["No records available"]
+                )
+                delete_record_btn = st.form_submit_button(
+                    "🗑️ Remove Selected Record"
+                )
+
+                if delete_record_btn and selected_label and selected_label != "No records available":
+                    target_id = record_options[selected_label]
+                    try:
+                        supabase.table("tender_submissions").delete().eq("id", target_id).execute()
+                        st.success(f"Removed audit record (ID: {target_id}).")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error removing record: {e}")
+
+        with col_del2:
+            with st.form("clear_all_audit_form"):
+                st.markdown("**Clear Entire Audit Trail**")
+                st.write(
+                    "⚠️ This action will delete all logged verification records."
+                )
+                confirm_clear = st.checkbox(
+                    "I confirm that I want to delete all audit records"
+                )
+                clear_all_btn = st.form_submit_button("⚠️ Clear All Audit Records")
+
+                if clear_all_btn:
+                    if confirm_clear:
+                        try:
+                            supabase.table("tender_submissions").delete().gt("id", 0).execute()
+                            st.warning("All audit verification records have been cleared.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error clearing records: {e}")
+                    else:
+                        st.error(
+                            "Please check the confirmation box before clearing all records."
+                        )
+    else:
+        st.info("No audit verification entries logged yet.")
+else:
+    st.warning(f"Unrecognized user role: {role}")

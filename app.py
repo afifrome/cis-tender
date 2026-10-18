@@ -131,15 +131,15 @@ if not st.session_state["logged_in"]:
         password = st.text_input("Password", type="password")
         login_btn = st.form_submit_button("Authenticate")
 
-        if login_btn:
-            # Authenticate against Supabase users table
+                if login_btn:
             try:
                 res = supabase.table("app1_users").select("*").eq("username", username).execute()
                 user_record = res.data[0] if res.data else None
             except Exception:
                 user_record = None
 
-            if user_record and check_password(password, user_record["password"]):
+            # Accepts both hashed passwords and plain-text (e.g., admin123 / audit123)
+            if user_record and (check_password(password, user_record["password"]) or password == user_record["password"]):
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = username
                 st.session_state["role"] = user_record["role"]

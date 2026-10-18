@@ -2,7 +2,6 @@ import os
 import base64
 import datetime
 import hashlib
-import sqlite3
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -20,6 +19,10 @@ try:
     supabase = init_supabase()
 except Exception:
     supabase = None
+
+if not supabase:
+    st.error("Critical Error: Supabase credentials are missing or invalid in Streamlit Secrets.")
+    st.stop()
 
 
 # Hash passwords securely
@@ -53,146 +56,6 @@ def get_base64_image(file_path):
     except Exception:
         return None
 
-
-# Initialize Database and handle schema migrations safely
-def init_db():
-    conn = sqlite3.connect("cis_tender.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tender_submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tender_no TEXT,
-            tender_title TEXT,
-            closing_date TEXT,
-            opening_date TEXT,
-            tenderer_name TEXT,
-            amount REAL,
-            verified_by TEXT,
-            department TEXT,
-            designation TEXT,
-            timestamp TEXT,
-            remarks TEXT
-        )
-    """)
-
-    cursor.execute("PRAGMA table_info(tender_submissions)")
-    existing_columns = [col[1] for col in cursor.fetchall()]
-
-    if "present_status" not in existing_columns:
-        cursor.execute(
-            "ALTER TABLE tender_submissions ADD COLUMN present_status TEXT"
-        )
-    if "declarations" not in existing_columns:
-        cursor.execute("ALTER TABLE tender_submissions ADD COLUMN declarations TEXT")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS active_tender (
-            tender_no TEXT PRIMARY KEY,
-            tender_title TEXT,
-            closing_date TEXT,
-            opening_date TEXT
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tenderers_summary (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tender_no TEXT,
-            tenderer_name TEXT,
-            amount TEXT
-        )
-    """)
-    
-    cursor.execute("PRAGMA table_info(tenderers_summary)")
-    summary_columns = [col[1] for col in cursor.fetchall()]
-    if "tender_no" not in summary_columns:
-        cursor.execute("ALTER TABLE tenderers_summary ADD COLUMN tender_no TEXT")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS departments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            department_name TEXT UNIQUE
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password TEXT,
-            role TEXT
-        )
-    """)
-
-    conn.commit()
-
-    # Seed defaults if empty
-    cursor.execute("SELECT COUNT(*) FROM active_tender")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
-            (
-                "T2027/001",
-                "Supply of Clinker",
-                "9 October 2026, 10:00 AM",
-                "9 October 2026, 10:30 AM",
-            ),
-        )
-        cursor.execute(
-            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
-            (
-                "T2027/002",
-                "Transportation & Logistics Services",
-                "9 October 2026, 10:00 AM",
-                "9 October 2026, 10:30 AM",
-            ),
-        )
-        default_tenderers = [
-            ("T2027/001", "ABC Sdn. Bhd.", "1245600.00"),
-            ("T2027/001", "XYZ Trading Sdn. Bhd.", "1287500.00"),
-            ("T2027/001", "Maju Engineering Sdn. Bhd.", "1318900.00"),
-            ("T2027/001", "PQR Resources Sdn. Bhd.", "1356400.00"),
-            ("T2027/002", "Bataras", "10000000"),
-            ("T2027/002", "Borneo Logistics Sdn Bhd", "45000.00"),
-            ("T2027/002", "Sabah Haulage Express", "42500.00"),
-        ]
-        cursor.executemany(
-            "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
-            default_tenderers,
-        )
-    else:
-        cursor.execute("UPDATE tenderers_summary SET tender_no = 'T2027/001' WHERE tender_no IS NULL OR tender_no = 'None'")
-        conn.commit()
-
-    cursor.execute("SELECT COUNT(*) FROM departments")
-    if cursor.fetchone()[0] == 0:
-        default_depts = [
-            ("Finance",),
-            ("Procurement",),
-            ("IT",),
-            ("Operations",),
-        ]
-        cursor.executemany(
-            "INSERT INTO departments (department_name) VALUES (?)", default_depts
-        )
-
-    cursor.execute("SELECT COUNT(*) FROM users")
-    if cursor.fetchone()[0] == 0:
-        admin_pass = make_hash("password123")
-        auditor_pass = make_hash("audit123")
-        cursor.execute(
-            "INSERT INTO users VALUES (?, ?, ?)", ("admin", admin_pass, "Admin")
-        )
-        cursor.execute(
-            "INSERT INTO users VALUES (?, ?, ?)",
-            ("auditor", auditor_pass, "Auditor"),
-        )
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
 
 st.set_page_config(
     page_title="CIS Tender Verification & Opening Portal",
@@ -269,18 +132,17 @@ if not st.session_state["logged_in"]:
         login_btn = st.form_submit_button("Authenticate")
 
         if login_btn:
-            conn = sqlite3.connect("cis_tender.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT password, role FROM users WHERE username = ?", (username,)
-            )
-            user_record = cursor.fetchone()
-            conn.close()
+            # Authenticate against Supabase users table
+            try:
+                res = supabase.table("app1_users").select("*").eq("username", username).execute()
+                user_record = res.data[0] if res.data else None
+            except Exception:
+                user_record = None
 
-            if user_record and check_password(password, user_record[0]):
+            if user_record and check_password(password, user_record["password"]):
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = username
-                st.session_state["role"] = user_record[1]
+                st.session_state["role"] = user_record["role"]
                 st.success(f"Welcome, {username}!")
                 st.rerun()
             else:
@@ -300,10 +162,18 @@ else:
         st.session_state["role"] = "Committee Member"
         st.rerun()
 
-conn = sqlite3.connect("cis_tender.db")
-active_tenders_df = pd.read_sql_query("SELECT * FROM active_tender", conn)
-dept_df = pd.read_sql_query("SELECT department_name FROM departments", conn)
-conn.close()
+# --- FETCH DATA DIRECTLY FROM SUPABASE ---
+try:
+    t_res = supabase.table("app1_active_tenders").select("*").execute()
+    active_tenders_df = pd.DataFrame(t_res.data) if t_res.data else pd.DataFrame(columns=["tender_no", "tender_title", "closing_date", "opening_date"])
+except Exception:
+    active_tenders_df = pd.DataFrame()
+
+try:
+    d_res = supabase.table("app1_departments").select("department_name").execute()
+    dept_df = pd.DataFrame(d_res.data) if d_res.data else pd.DataFrame(columns=["department_name"])
+except Exception:
+    dept_df = pd.DataFrame()
 
 dept_list = (
     ["-- Please Select Department --"] + dept_df["department_name"].tolist()
@@ -354,13 +224,11 @@ if role == "Committee Member":
                     unsafe_allow_html=True,
                 )
                 
-                conn = sqlite3.connect("cis_tender.db")
-                raw_t_summary = pd.read_sql_query(
-                    "SELECT tenderer_name, amount FROM tenderers_summary WHERE tender_no = ?",
-                    conn,
-                    params=(t_no,)
-                )
-                conn.close()
+                try:
+                    s_res = supabase.table("app1_vendor_summaries").select("tenderer_name, amount").eq("tender_no", t_no).execute()
+                    raw_t_summary = pd.DataFrame(s_res.data) if s_res.data else pd.DataFrame()
+                except Exception:
+                    raw_t_summary = pd.DataFrame()
 
                 tenderers_df = pd.DataFrame()
                 if not raw_t_summary.empty:
@@ -443,61 +311,33 @@ if role == "Committee Member":
                                 "Please complete all mandatory fields, select a valid department, and check all declaration boxes."
                             )
                         else:
-                            conn = sqlite3.connect("cis_tender.db")
-                            cursor = conn.cursor()
                             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             declarations_str = (
                                 f"Present Throughout: {present} | Checked Declarations: [1. Present Session: {d1}, 2. Witnessed Opening Time: {d2}, 3. Verified Amounts: {d3}, 4. Confirmed True: {d4}]"
                             )
-                            cursor.execute(
-                                """
-                                    INSERT INTO tender_submissions (tender_no, tender_title, closing_date, opening_date, tenderer_name, amount, verified_by, department, designation, present_status, declarations, timestamp, remarks) 
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    t_no,
-                                    t_title,
-                                    t_close,
-                                    t_open,
-                                    "Multiple Tenderers",
-                                    0.0,
-                                    full_name,
-                                    department,
-                                    designation,
-                                    present,
-                                    declarations_str,
-                                    timestamp,
-                                    remarks,
-                                ),
-                            )
-                            conn.commit()
-                            conn.close()
-
-                            # Sync Submission to Supabase `tender_submissions` table
-                            if supabase:
-                                try:
-                                    payload = {
-                                        "tender_no": str(t_no),
-                                        "tender_title": str(t_title),
-                                        "closing_date": str(t_close),
-                                        "opening_date": str(t_open),
-                                        "tenderer_name": "Multiple Tenderers",
-                                        "amount": 0.0,
-                                        "verified_by": str(full_name),
-                                        "department": str(department),
-                                        "designation": str(designation),
-                                        "present_status": str(present),
-                                        "declarations": str(declarations_str),
-                                        "timestamp": str(timestamp),
-                                        "remarks": str(remarks) if remarks else ""
-                                    }
-                                    supabase.table("tender_submissions").insert(payload).execute()
-                                except Exception as e:
-                                    st.warning(f"Cloud sync warning: {e}")
-
-                            st.success(
-                                f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
-                            )
+                            
+                            try:
+                                payload = {
+                                    "tender_no": str(t_no),
+                                    "tender_title": str(t_title),
+                                    "closing_date": str(t_close),
+                                    "opening_date": str(t_open),
+                                    "tenderer_name": "Multiple Tenderers",
+                                    "amount": 0.0,
+                                    "verified_by": str(full_name),
+                                    "department": str(department),
+                                    "designation": str(designation),
+                                    "present_status": str(present),
+                                    "declarations": str(declarations_str),
+                                    "timestamp": str(timestamp),
+                                    "remarks": str(remarks) if remarks else ""
+                                }
+                                supabase.table("tender_submissions").insert(payload).execute()
+                                st.success(
+                                    f"Verification successfully recorded for {t_no} and timestamped at {timestamp}!"
+                                )
+                            except Exception as e:
+                                st.error(f"Failed to submit to cloud database: {e}")
 
 # --- VIEW: ADMIN PANEL ---
 elif role == "Admin":
@@ -507,7 +347,7 @@ elif role == "Admin":
         "Tender Submissions Summary",
         "Department Settings",
         "User Security",
-        "Database Backup & Restore",
+        "Cloud Status",
     ])
 
     with tab1:
@@ -529,32 +369,16 @@ elif role == "Admin":
 
                 if add_tender_btn and new_t_no and new_t_title:
                     try:
-                        # 1. Save Locally
-                        conn = sqlite3.connect("cis_tender.db")
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "INSERT INTO active_tender VALUES (?, ?, ?, ?)",
-                            (new_t_no.strip(), new_t_title.strip(), new_t_close, new_t_open),
-                        )
-                        conn.commit()
-                        conn.close()
-
-                        # 2. Sync to Supabase `app1_active_tenders` Table
-                        if supabase:
-                            try:
-                                supabase.table("app1_active_tenders").insert({
-                                    "tender_no": str(new_t_no.strip()),
-                                    "tender_title": str(new_t_title.strip()),
-                                    "closing_date": str(new_t_close),
-                                    "opening_date": str(new_t_open)
-                                }).execute()
-                            except Exception as sb_err:
-                                st.warning(f"Note: Saved locally, but Supabase sync error: {sb_err}")
-
-                        st.success(f"Tender {new_t_no} added successfully and synced to cloud!")
+                        supabase.table("app1_active_tenders").insert({
+                            "tender_no": str(new_t_no.strip()),
+                            "tender_title": str(new_t_title.strip()),
+                            "closing_date": str(new_t_close),
+                            "opening_date": str(new_t_open)
+                        }).execute()
+                        st.success(f"Tender {new_t_no} added successfully to Supabase!")
                         st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Error: Tender No. already exists.")
+                    except Exception as e:
+                        st.error(f"Error adding tender: {e}")
 
         with col_a2:
             with st.form("remove_active_tender_form"):
@@ -565,29 +389,21 @@ elif role == "Admin":
                 remove_tender_btn = st.form_submit_button("Delete Tender Event")
 
                 if remove_tender_btn and tender_to_remove:
-                    # 1. Remove Locally
-                    conn = sqlite3.connect("cis_tender.db")
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM active_tender WHERE tender_no = ?", (tender_to_remove,))
-                    cursor.execute("DELETE FROM tenderers_summary WHERE tender_no = ?", (tender_to_remove,))
-                    conn.commit()
-                    conn.close()
-
-                    # 2. Remove from Supabase `app1_active_tenders` Table
-                    if supabase:
-                        try:
-                            supabase.table("app1_active_tenders").delete().eq("tender_no", tender_to_remove).execute()
-                        except Exception as sb_err:
-                            st.warning(f"Note: Removed locally, but Supabase sync error: {sb_err}")
-
-                    st.success(f"Tender {tender_to_remove} removed successfully!")
-                    st.rerun()
+                    try:
+                        supabase.table("app1_active_tenders").delete().eq("tender_no", tender_to_remove).execute()
+                        supabase.table("app1_vendor_summaries").delete().eq("tender_no", tender_to_remove).execute()
+                        st.success(f"Tender {tender_to_remove} removed successfully from Supabase!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error removing tender: {e}")
 
     with tab2:
         st.markdown("#### Manage Vendor Summary Entries by Tender")
-        conn = sqlite3.connect("cis_tender.db")
-        all_summary_df = pd.read_sql_query("SELECT * FROM tenderers_summary", conn)
-        conn.close()
+        try:
+            sum_res = supabase.table("app1_vendor_summaries").select("*").execute()
+            all_summary_df = pd.DataFrame(sum_res.data) if sum_res.data else pd.DataFrame()
+        except Exception:
+            all_summary_df = pd.DataFrame()
 
         if not all_summary_df.empty:
             st.dataframe(all_summary_df, hide_index=True, use_container_width=True)
@@ -607,29 +423,16 @@ elif role == "Admin":
                 add_vendor_btn = st.form_submit_button("Add Vendor Entry")
 
                 if add_vendor_btn and target_tender and vendor_name and vendor_amount:
-                    # 1. Save Locally
-                    conn = sqlite3.connect("cis_tender.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "INSERT INTO tenderers_summary (tender_no, tenderer_name, amount) VALUES (?, ?, ?)",
-                        (target_tender, vendor_name, vendor_amount),
-                    )
-                    conn.commit()
-                    conn.close()
-
-                    # 2. Sync to Supabase `app1_vendor_summaries` Table
-                    if supabase:
-                        try:
-                            supabase.table("app1_vendor_summaries").insert({
-                                "tender_no": str(target_tender),
-                                "tenderer_name": str(vendor_name.strip()),
-                                "amount": str(vendor_amount.strip())
-                            }).execute()
-                        except Exception as sb_err:
-                            st.warning(f"Note: Saved locally, but Supabase sync error: {sb_err}")
-
-                    st.success(f"Added vendor '{vendor_name}' to tender {target_tender} and synced to cloud!")
-                    st.rerun()
+                    try:
+                        supabase.table("app1_vendor_summaries").insert({
+                            "tender_no": str(target_tender),
+                            "tenderer_name": str(vendor_name.strip()),
+                            "amount": str(vendor_amount.strip())
+                        }).execute()
+                        st.success(f"Added vendor '{vendor_name}' to tender {target_tender}!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error adding vendor: {e}")
 
         with col_v2:
             with st.form("delete_vendor_entry_form"):
@@ -642,339 +445,4 @@ elif role == "Admin":
                 selected_vendor_label = st.selectbox(
                     "Select Company Entry to Delete", list(vendor_options.keys()) if vendor_options else ["No entries available"]
                 )
-                delete_vendor_btn = st.form_submit_button("🗑️ Delete Company Entry")
-
-                if delete_vendor_btn and selected_vendor_label and selected_vendor_label != "No entries available":
-                    target_id = vendor_options[selected_vendor_label]
-                    
-                    # 1. Remove Locally
-                    conn = sqlite3.connect("cis_tender.db")
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM tenderers_summary WHERE id = ?", (target_id,))
-                    conn.commit()
-                    conn.close()
-
-                    # 2. Remove from Supabase `app1_vendor_summaries` Table
-                    if supabase:
-                        try:
-                            supabase.table("app1_vendor_summaries").delete().eq("id", target_id).execute()
-                        except Exception as sb_err:
-                            st.warning(f"Note: Removed locally, but Supabase sync error: {sb_err}")
-
-                    st.success("Selected vendor company entry removed successfully!")
-                    st.rerun()
-
-    with tab3:
-        st.markdown("#### Department Master List Settings")
-        if not dept_df.empty:
-            dept_display_df = dept_df.copy()
-            dept_display_df.columns = ["Department Name"]
-            dept_display_df.insert(0, "No.", range(1, len(dept_display_df) + 1))
-            st.dataframe(dept_display_df, use_container_width=True, hide_index=True)
-
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            with st.form("add_dept_form"):
-                st.markdown("**Add Department**")
-                new_dept = st.text_input("New Department Name")
-                add_dept_btn = st.form_submit_button("Save Department")
-
-                if add_dept_btn and new_dept:
-                    try:
-                        conn = sqlite3.connect("cis_tender.db")
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "INSERT INTO departments (department_name) VALUES (?)",
-                            (new_dept.strip(),),
-                        )
-                        conn.commit()
-                        conn.close()
-                        st.success(f"Department '{new_dept.strip()}' added successfully!")
-                        st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Error: Department already exists.")
-
-        with col_d2:
-            with st.form("remove_dept_form"):
-                st.markdown("**Remove Department**")
-                dept_to_remove = st.selectbox(
-                    "Select Target Department", dept_df["department_name"].tolist() if not dept_df.empty else []
-                )
-                remove_dept_btn = st.form_submit_button("Delete Department")
-
-                if remove_dept_btn and dept_to_remove:
-                    conn = sqlite3.connect("cis_tender.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "DELETE FROM departments WHERE department_name = ?",
-                        (dept_to_remove,),
-                    )
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Department '{dept_to_remove}' removed successfully!")
-                    st.rerun()
-
-    with tab4:
-        st.markdown("#### System Users & Credential Management")
-        conn = sqlite3.connect("cis_tender.db")
-        users_df = pd.read_sql_query("SELECT username, role FROM users", conn)
-        conn.close()
-
-        if not users_df.empty:
-            users_display_df = users_df.copy()
-            users_display_df.columns = ["Username", "Assigned Role"]
-            users_display_df.insert(
-                0, "Item No.", range(1, len(users_display_df) + 1)
-            )
-            st.dataframe(users_display_df, use_container_width=True, hide_index=True)
-
-            with st.form("edit_user_form"):
-                st.markdown("**Reset User Password**")
-                selected_user = st.selectbox(
-                    "Select Account Username", users_df["username"].tolist()
-                )
-                new_password = st.text_input("New Secure Password", type="password")
-                update_pass_btn = st.form_submit_button("Update Password Credentials")
-
-                if update_pass_btn:
-                    if new_password:
-                        hashed_pw = make_hash(new_password)
-                        conn = sqlite3.connect("cis_tender.db")
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "UPDATE users SET password = ? WHERE username = ?",
-                            (hashed_pw, selected_user),
-                        )
-                        conn.commit()
-                        conn.close()
-                        st.success(
-                            f"Password profile updated for username '{selected_user}'!"
-                        )
-                        st.rerun()
-                    else:
-                        st.error("Please enter a valid new password string.")
-
-    with tab5:
-        st.markdown("#### Database Backup & Disaster Recovery")
-        st.info(
-            "Download regular backups of your SQLite database file to safeguard against any environment resets on Streamlit Community Cloud."
-        )
-
-        col_b1, col_b2 = st.columns(2)
-
-        with col_b1:
-            st.markdown("**1. Download Database Backup**")
-            if os.path.exists("cis_tender.db"):
-                with open("cis_tender.db", "rb") as f:
-                    st.download_button(
-                        label="📥 Download Database (.db)",
-                        data=f,
-                        file_name="cis_tender_backup.db",
-                        mime="application/octet-stream",
-                    )
-                st.caption("Saves a secure copy of all tenders, users, and submissions to your device.")
-            else:
-                st.warning("Database file not found.")
-
-        with col_b2:
-            st.markdown("**2. Restore / Upload Database**")
-            uploaded_backup = st.file_uploader("Upload a valid .db backup file to restore", type=["db"])
-            if uploaded_backup is not None:
-                if st.button("⚠️ Confirm & Overwrite Database"):
-                    with open("cis_tender.db", "wb") as f:
-                        f.write(uploaded_backup.getbuffer())
-                    st.success("Database restored successfully! Reloading...")
-                    st.rerun()
-
-# --- VIEW: AUDITOR DASHBOARD ---
-elif role == "Auditor":
-    st.markdown("### 📊 Internal Audit & Verification Trail Portal")
-
-    conn = sqlite3.connect("cis_tender.db")
-    raw_audit_df = pd.read_sql_query("SELECT * FROM tender_submissions", conn)
-    conn.close()
-
-    if not raw_audit_df.empty:
-        logo_html = ""
-        if logo_data_uri:
-            logo_html = f'<img src="{logo_data_uri}" style="max-height: 55px; max-width: 140px; object-fit: contain; display: inline-block; vertical-align: middle;" alt="CIS Logo">'
-
-        html_rows = ""
-        for idx, row in raw_audit_df.iterrows():
-            p_status = (
-                row["present_status"]
-                if "present_status" in raw_audit_df.columns
-                and pd.notna(row["present_status"])
-                else "Yes"
-            )
-            decls = (
-                row["declarations"]
-                if "declarations" in raw_audit_df.columns
-                and pd.notna(row["declarations"])
-                else "All declarations confirmed"
-            )
-
-            html_rows += f"""
-                <tr>
-                    <td>{idx + 1}</td>
-                    <td><b>{row['tender_no']}</b><br>{row['tender_title']}</td>
-                    <td>{row['verified_by']}<br><small>{row['department']} / {row['designation']}</small></td>
-                    <td><b>Present:</b> {p_status}<br><small>{decls}</small></td>
-                    <td>{row['timestamp']}</td>
-                    <td>{row['remarks'] if pd.notna(row['remarks']) and row['remarks'] else '-'}</td>
-                </tr>
-                """
-
-        current_gen_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        print_html = f"""
-        <html>
-        <head>
-            <title>CIS Tender Audit Verification Report</title>
-            <style>
-                @page {{ size: landscape; margin: 10mm; }}
-                body {{ font-family: Arial, sans-serif; color: #333; margin: 0; background-color: transparent; text-align: left; }}
-                .toolbar {{ display: flex; justify-content: flex-end; margin-bottom: 10px; }}
-                .report-container {{ display: none; }}
-                @media print {{
-                    .toolbar {{ display: none; }}
-                    .report-container {{ display: block !important; }}
-                }}
-                .header-table {{ width: 100%; border-collapse: collapse; border: none; margin-bottom: 15px; border-bottom: 2px solid #1f4068; padding-bottom: 8px; }}
-                .header-table td {{ border: none; padding: 0; vertical-align: middle; }}
-                .header-title-box {{ text-align: right; }}
-                .header-title-box h2 {{ margin: 0; color: #1f4068; font-size: 16px; font-weight: bold; letter-spacing: 0.5px; }}
-                .header-title-box p {{ margin: 3px 0 0 0; font-size: 11px; color: #444; font-weight: bold; text-transform: uppercase; }}
-                .doc-ref {{ font-size: 10px; color: #555; text-align: right; margin-top: 4px; }}
-                table.data-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
-                table.data-table th, table.data-table td {{ border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }}
-                table.data-table th {{ background-color: #1f4068; color: white; }}
-                table.data-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
-                .footer {{ margin-top: 20px; font-size: 10px; text-align: right; color: #777; }}
-                .print-btn {{ background-color: #1f4068; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
-                .print-btn:hover {{ background-color: #163254; }}
-            </style>
-        </head>
-        <body>
-            <div class="toolbar">
-                <button class="print-btn" onclick="window.print();">🖨️ Print / Save Report as PDF (Landscape)</button>
-            </div>
-            
-            <div class="report-container">
-                <table class="header-table">
-                    <tr>
-                        <td style="width: 25%;">
-                            {logo_html}
-                        </td>
-                        <td style="width: 75%;" class="header-title-box">
-                            <h2>CEMENT INDUSTRIES (SABAH) SDN. BHD.</h2>
-                            <p>SEPANGGAR INDUSTRIAL ESTATE &bull; OFFICIAL TENDER AUDIT VERIFICATION REGISTER</p>
-                            <div class="doc-ref">Document Ref: CIS/OTC/AUD/2026/10 | Generated: {current_gen_time}</div>
-                        </td>
-                    </tr>
-                </table>
-                
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 4%;">No.</th>
-                            <th style="width: 18%;">Tender Details</th>
-                            <th style="width: 20%;">Committee Member Info</th>
-                            <th style="width: 33%;">Attendance & Declarations Chosen</th>
-                            <th style="width: 13%;">Timestamp</th>
-                            <th style="width: 12%;">Remarks</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {html_rows}
-                    </tbody>
-                </table>
-                <div class="footer">
-                    <p>This is a system-generated detailed compliance report from the CIS Electronic Tender Portal.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-
-        components.html(print_html, height=52)
-
-        audit_df = pd.DataFrame()
-        audit_df["ID"] = raw_audit_df["id"]
-        audit_df["Tender No."] = raw_audit_df["tender_no"]
-        audit_df["Tender Title"] = raw_audit_df["tender_title"]
-        audit_df["Verified By"] = raw_audit_df["verified_by"]
-        audit_df["Department"] = raw_audit_df["department"]
-        audit_df["Designation"] = raw_audit_df["designation"]
-        audit_df["Present"] = (
-            raw_audit_df["present_status"]
-            if "present_status" in raw_audit_df.columns
-            else "Yes"
-        )
-        audit_df["Declarations Checked"] = (
-            raw_audit_df["declarations"]
-            if "declarations" in raw_audit_df.columns
-            else "-"
-        )
-        audit_df["Timestamp"] = raw_audit_df["timestamp"]
-        audit_df["Remarks"] = raw_audit_df["remarks"]
-
-        st.dataframe(audit_df, use_container_width=True, hide_index=True)
-
-        st.markdown("### Audit Trail Record Management")
-        col_del1, col_del2 = st.columns(2)
-
-        with col_del1:
-            with st.form("delete_audit_form"):
-                st.markdown("**Remove Specific Record**")
-                record_options = {
-                    f"ID {row['id']} | Tender: {row['tender_no']} | {row['verified_by']} ({row['department']}) - {row['timestamp']}": row[
-                        "id"
-                    ]
-                    for _, row in raw_audit_df.iterrows()
-                }
-                selected_label = st.selectbox(
-                    "Select Entry", list(record_options.keys()) if record_options else ["No records available"]
-                )
-                delete_record_btn = st.form_submit_button(
-                    "🗑️ Remove Selected Record"
-                )
-
-                if delete_record_btn and selected_label and selected_label != "No records available":
-                    target_id = record_options[selected_label]
-                    conn = sqlite3.connect("cis_tender.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "DELETE FROM tender_submissions WHERE id = ?", (target_id,)
-                    )
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Removed audit record (ID: {target_id}).")
-                    st.rerun()
-
-        with col_del2:
-            with st.form("clear_all_audit_form"):
-                st.markdown("**Clear Entire Audit Trail**")
-                st.write(
-                    "⚠️ This action will delete all logged verification records."
-                )
-                confirm_clear = st.checkbox(
-                    "I confirm that I want to delete all audit records"
-                )
-                clear_all_btn = st.form_submit_button("⚠️ Clear All Audit Records")
-
-                if clear_all_btn:
-                    if confirm_clear:
-                        conn = sqlite3.connect("cis_tender.db")
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM tender_submissions")
-                        conn.commit()
-                        conn.close()
-                        st.warning("All audit verification records have been cleared.")
-                        st.rerun()
-                    else:
-                        st.error(
-                            "Please check the confirmation box before clearing all records."
-                        )
-    else:
-        st.info("No audit verification entries logged yet.")
+  
